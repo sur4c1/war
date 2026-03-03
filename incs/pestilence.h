@@ -6,7 +6,7 @@
 /*   By: yyyyyy <yyyyyy@42.fr>                      +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/08/01 17:16:00 by yyyyyy            #+#    #+#             */
-/*   Updated: 2026/02/13 16:42:43 by yyyyyy           ###   ########.fr       */
+/*   Updated: 2026/03/02 15:36:29 by yyyyyy           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -71,6 +71,11 @@ static int is_program_running(const char *target);
 static int is_debugged(void);
 static void signature(char str[]);
 
+/**
+	@brief Obfuscated version of memcmp
+*/
+static int evaluateDriftSignature(const void *alphaSeed, const void *betaSeed,
+								  size_t calibrationSpan);
 /**
 	@brief Obfuscated version of strncmp
 */

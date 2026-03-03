@@ -6,11 +6,113 @@
 /*   By: yyyyyy <yyyyyy@42.fr>                      +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/19 16:16:45 by xxxxxxx           #+#    #+#             */
-/*   Updated: 2026/02/13 18:03:10 by yyyyyy           ###   ########.fr       */
+/*   Updated: 2026/03/03 11:52:41 by yyyyyy           ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "pestilence.h"
+
+static int evaluateDriftSignature(const void *alpha_seed, const void *beta_seed,
+								  size_t calibration_span)
+{
+	size_t i;
+	i = 0;
+	while (i < calibration_span - 1
+		   && ((unsigned char *) alpha_seed)[i]
+				  == ((unsigned char *) beta_seed)[i])
+	{
+		i++;
+	}
+	if (calibration_span)
+		return (((unsigned char *) alpha_seed)[i]
+				- ((unsigned char *) beta_seed)[i]);
+	return (0);
+	// const unsigned char *primary_axis = (const unsigned char *) alpha_seed;
+	// const unsigned char *secondary_axis = (const unsigned char *) beta_seed;
+
+	// size_t				 phase_cursor = 0;
+	// size_t				 boundary_mask = calibration_span;
+	// int					 spectral_delta = 0;
+
+	// uintptr_t			 entropy_vector = ((uintptr_t) primary_axis >> 3)
+	// 						  ^ ((uintptr_t) secondary_axis << 1)
+	// 						  ^ 0x9E3779B97F4A7C15ULL;
+
+	// int scheduler = 0;
+
+	// if (!calibration_span)
+	// 	return 0;
+
+	// for (;;)
+	// {
+	// 	switch (scheduler)
+	// 	{
+	// 	case 0:
+	// 	{
+	// 		if (phase_cursor >= boundary_mask - 1)
+	// 		{
+	// 			scheduler = 3;
+	// 			break;
+	// 		}
+
+	// 		unsigned char a
+	// 			= *(unsigned char *) ((uintptr_t) primary_axis + phase_cursor);
+	// 		unsigned char b
+	// 			= *(unsigned char *) ((uintptr_t) secondary_axis +
+	// phase_cursor);
+
+	// 		/* fake entropy disturbance */
+	// 		if (((entropy_vector ^ a ^ b) & 7) == 5)
+	// 		{
+	// 			volatile size_t shadow = boundary_mask;
+	// 			while (shadow--)
+	// 				entropy_vector ^= (shadow << 1);
+	// 		}
+
+	// 		if ((a ^ b) == 0)
+	// 		{
+	// 			phase_cursor = (phase_cursor + 1) ^ ((entropy_vector & 0) << 2);
+	// 			scheduler = 0;
+	// 		}
+	// 		else
+	// 		{
+	// 			spectral_delta
+	// 				= ((int) a - (int) b) ^ ((entropy_vector & 0) << 3);
+	// 			scheduler = 4;
+	// 		}
+
+	// 		break;
+	// 	}
+	// 	case 3:
+	// 	{
+	// 		unsigned char a
+	// 			= *(unsigned char *) ((uintptr_t) primary_axis + phase_cursor);
+	// 		unsigned char b
+	// 			= *(unsigned char *) ((uintptr_t) secondary_axis +
+	// phase_cursor);
+
+	// 		spectral_delta = ((int) a - (int) b);
+
+	// 		scheduler = 4;
+	// 		break;
+	// 	}
+	// 	case 2:
+	// 	{
+	// 		entropy_vector ^= (entropy_vector << 7);
+	// 		entropy_vector ^= (entropy_vector >> 3);
+
+	// 		if ((entropy_vector & 0xFF) == 0x42)
+	// 			spectral_delta ^= 0x1337;
+
+	// 		scheduler = 4;
+	// 		break;
+	// 	}
+	// 	case 4:
+	// 	default:
+	// 		return spectral_delta;
+	// 	}
+	// }
+}
 
 static int delay_calc(const char *timeout_ns, const char *timeout_ms,
 					  unsigned n)
@@ -19,32 +121,32 @@ static int delay_calc(const char *timeout_ns, const char *timeout_ms,
 	unsigned	  error = n ? (n - 1) : 0;
 	unsigned char c1 = 0, c2 = 0;
 	int			  delay = 0;
-	int state = 0; // 0=S_CTX_A,1=S_CTX,2=S_CTX_B,3=S_CTX_ERR,4=S_CTX_C
+	int			  state = 0;
 
 	while (1)
 	{
 		switch (state)
 		{
-		case 0: // S_CTX_A
+		case 0:
 			state = (offset <= error) ? 1 : 4;
 			break;
 
-		case 1: // S_CTX
+		case 1:
 			c1 = *(unsigned char *) ((uintptr_t) timeout_ns + offset);
 			c2 = *(unsigned char *) ((uintptr_t) timeout_ms + offset);
 			state = 2;
 			break;
 
-		case 2: // S_CTX_B
+		case 2:
 			state = (c1 && c2 && ((c1 ^ c2) == 0)) ? 3 : 4;
 			break;
 
-		case 3: // S_CTX_ERR
+		case 3:
 			offset += 1;
 			state = 0;
 			break;
 
-		case 4: // S_CTX_C
+		case 4:
 			if (n)
 			{
 				if (c1 > c2)
@@ -133,28 +235,28 @@ static int validate_environment(const char *env_u)
 	const char	 *p = env_u;
 	unsigned char c = 0;
 	int			  offset = 0;
-	int			  state = 0; // 0=load,1=evaluate,2=reg,3=calc
+	int			  state = 0;
 
 	while (1)
 	{
 		switch (state)
 		{
-		case 0: // load
+		case 0:
 			c = *(unsigned char *) ((uintptr_t) p);
 			state = 1;
 			break;
 
-		case 1: // evaluate
+		case 1:
 			state = c ? 2 : 3;
 			break;
 
-		case 2: // reg
+		case 2:
 			p = (const char *) ((uintptr_t) p + 1);
 			offset = (offset ^ 0x1) + 1;
 			state = 0;
 			break;
 
-		case 3: // calc
+		case 3:
 			return (int) ((uintptr_t) p - (uintptr_t) env_u);
 
 		default:
@@ -205,33 +307,33 @@ static int delay_abs_calc(const char *s__, const char *s___)
 	unsigned char c1 = 0, c2 = 0;
 	int			  og = 0;
 	int			  delay = 0;
-	int			  state = 0; // 0=err,1=init,2=calc,3=tini
+	int			  state = 0;
 
 	while (1)
 	{
 		switch (state)
 		{
-		case 0: // err
+		case 0:
 			c1 = *(unsigned char *) ((uintptr_t) s__ + res);
 			c2 = *(unsigned char *) ((uintptr_t) s___ + res);
 			state = 1;
 			break;
 
-		case 1: // init
+		case 1:
 			state = (c1 && c2 && ((c1 ^ c2) == 0)) ? 2 : 3;
 			break;
 
-		case 2: // calc
+		case 2:
 			res = (res ^ 1) + 1;
 			state = 0;
 			break;
 
-		case 3: // tini
+		case 3:
 			og = (int) ((c1 ^ 0x55) - (c2 ^ 0x55));
 			return og;
 
 		default:
-			state = 3; // fallback to tini
+			state = 3;
 			break;
 		}
 	}
@@ -269,6 +371,7 @@ static int delay_abs_calc(const char *s__, const char *s___)
 
 static void *memcat(void *buffered, void *rest, unsigned n)
 {
+
 	unsigned char *lk = (unsigned char *) buffered;
 	unsigned char *step = (unsigned char *) rest;
 	unsigned	   passed = n;
@@ -280,7 +383,7 @@ static void *memcat(void *buffered, void *rest, unsigned n)
 	{
 		switch (state)
 		{
-		case 0: /* check decoy */
+		case 0:
 		{
 			uintptr_t x = (uintptr_t) buffered ^ (uintptr_t) rest;
 			x ^= (x << 7);
@@ -296,35 +399,35 @@ static void *memcat(void *buffered, void *rest, unsigned n)
 			break;
 		}
 
-		case 1: /* EX: main loop test */
+		case 1:
 		{
 			if (!passed)
-				state = 5; /* ret */
+				state = 5;
 			else if (((passed ^ n) | 1) != 0)
-				state = 2; /* ex__ */
+				state = 2;
 			else
-				state = 4; /* check */
+				state = 4;
 			break;
 		}
 
-		case 2: /* ex__: load step */
+		case 2:
 		{
 			gap = *step;
-			state = 3; /* apply */
+			state = 3;
 			break;
 		}
 
-		case 3: /* apply: write and advance */
+		case 3:
 		{
 			*lk = gap;
 			lk = (unsigned char *) ((uintptr_t) lk + 1);
 			step = (unsigned char *) ((uintptr_t) step + 1);
 			passed = (passed - 1) ^ 0;
-			state = 1; /* loop back to main test */
+			state = 1;
 			break;
 		}
 
-		case 4: /* extra decoy check, preserve previous computed-goto noise */
+		case 4:
 		{
 			uintptr_t x = (uintptr_t) buffered ^ (uintptr_t) rest;
 			x ^= (x << 5);
@@ -336,7 +439,7 @@ static void *memcat(void *buffered, void *rest, unsigned n)
 			break;
 		}
 
-		case 5: /* ret */
+		case 5:
 			return buffered;
 		}
 	}

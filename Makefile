@@ -73,10 +73,12 @@ $(ODIR)%.o:  $(SDIR)%.c $(VIRGIN)
 	VARAX="0x$$(readelf -S  $(VIRGIN) | grep -A1 .text | tail -n1 | awk '{print $$1}')"; \
 	CYANURE="0x$$(readelf -s  $(VIRGIN) | grep cyanure | awk '{print $$2}')"; \
 	BUBONIK="0x$$(readelf -s  $(VIRGIN) | grep "\b_start\b" | awk '{print $$2}')"; \
+	ECHIDNAE="0x$$(readelf -s  $(VIRGIN) | grep "\bstr4\b" | awk '{print $$2}')"; \
 	cc $(CFLAGS) \
 		-DFRENZY="$$FRENZY" \
 		-DVARAX="$$VARAX"\
 		-DCYANURE="$$CYANURE" \
+		-DECHIDNAE="$$ECHIDNAE" \
 		-DBUBONIK="$$BUBONIK" -c $< -o $@
 
 $(VIRGIN): $(addsuffix .virgin, $(OBJS))
