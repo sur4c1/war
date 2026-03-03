@@ -1,8 +1,8 @@
 #!zsh
 
 test=(
-    hello
-    # /bin/ls
+    # hello
+    /bin/ls
     # /bin/true
     # /bin/false
     # /bin/echo
@@ -34,7 +34,7 @@ test=(
 )
 
 make || exit
-cc -w test/hello.c -o hello
+clang -w  test/hello.c -o hello
 rm -rf /tmp/test/
 rm -rf /tmp/test2/
 mkdir -p /tmp/test

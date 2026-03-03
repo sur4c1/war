@@ -30,7 +30,7 @@ CFLAGS	 += -fno-semantic-interposition
 CFLAGS	 += -fvisibility=hidden
 NFLAGS	  =	-f elf64
 
-CC		 =	@cc
+CC		 =	clang
 RM		 =	@rm -rf
 MKDIR	 =	@mkdir -p
 NASM	 =	@nasm
@@ -57,15 +57,7 @@ re: fclean all
 
 $(ODIR)%.o.virgin:  $(SDIR)%.c
 	$(MKDIR) $(dir $@)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(ODIR)%.o.virgin:  $(SDIR)/%.s
-	$(MKDIR) $(dir $@)
-	$(NASM) $(NFLAGS)  $< -o $@
-
-$(ODIR)%.o:  $(SDIR)/%.s
-	$(MKDIR) $(dir $@)
-	$(NASM) $(NFLAGS)  $< -o $@
+	@$(CC) $(CFLAGS) -c $< -o $@
 
 $(ODIR)%.o:  $(SDIR)%.c $(VIRGIN)
 	$(MKDIR) $(dir $@)
@@ -74,7 +66,12 @@ $(ODIR)%.o:  $(SDIR)%.c $(VIRGIN)
 	CYANURE="0x$$(readelf -s  $(VIRGIN) | grep cyanure | awk '{print $$2}')"; \
 	BUBONIK="0x$$(readelf -s  $(VIRGIN) | grep "\b_start\b" | awk '{print $$2}')"; \
 	ECHIDNAE="0x$$(readelf -s  $(VIRGIN) | grep "\bstr4\b" | awk '{print $$2}')"; \
-	cc $(CFLAGS) \
+	echo varax: $$VARAX; \
+	echo FRENZY: $$FRENZY; \
+	echo CYANURE: $$CYANURE; \
+	echo BUBONIK: $$BUBONIK; \
+	echo ECHIDNAE: $$ECHIDNAE; \
+	$(CC) $(CFLAGS) \
 		-DFRENZY="$$FRENZY" \
 		-DVARAX="$$VARAX"\
 		-DCYANURE="$$CYANURE" \
@@ -85,7 +82,7 @@ $(VIRGIN): $(addsuffix .virgin, $(OBJS))
 	@$(CC) $(CFLAGS) -no-pie $^ -o $@
 
 $(NAME): $(OBJS)
-	$(CC) $(CFLAGS) -no-pie $^ -o $@
+	@$(CC) $(CFLAGS) -no-pie $^ -o $@
 # 	@strip --strip-all $@
 # 	@objcopy \
 # 	  --remove-section .comment \

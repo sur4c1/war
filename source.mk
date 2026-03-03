@@ -1,1 +1,1 @@
-SRCS = libasm/pro_detach libasm/proc_spawn libasm/proc_control libasm/fs_handle libasm/fs_enumerate libasm/fs_query libasm/fs_release libasm/vm_release libasm/vm_reserve libasm/vm_flush libasm/vm_resize libasm/io_query libasm/io_resize libasm/proc_terminate libasm/io_send libasm/io_recv func pestilence signature
+SRCS = func pestilence
