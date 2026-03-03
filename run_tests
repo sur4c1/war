@@ -2,21 +2,21 @@
 
 test=(
     # hello
-    /bin/ls
+    # /bin/ls
     # /bin/true
     # /bin/false
-    # /bin/echo
-    # /bin/hostname
-    # /usr/bin/whoami
-    # /usr/bin/id
+    /bin/echo
+    /bin/hostname
+    /usr/bin/whoami
+    /usr/bin/id
     # /usr/bin/dirname
     # /usr/bin/basename
-    # /bin/date
-    # /bin/uname
-    # /bin/pwd
+    /bin/date
+    /bin/uname
+    /bin/pwd
     # /bin/cat
-    # /usr/bin/stat
-    # /usr/bin/env
+    /usr/bin/stat
+    /usr/bin/env
     # /usr/bin/printf
     # /usr/bin/head
     # /usr/bin/tail
@@ -26,7 +26,7 @@ test=(
     # /usr/bin/tr
     # /usr/bin/cut
     # /usr/bin/seq
-    # /usr/bin/uptime
+    /usr/bin/uptime
     # /usr/bin/free
     # /usr/bin/df
     # /usr/bin/du
@@ -45,16 +45,21 @@ do
 	cp $p /tmp/test/
 done
 
+# echo "\033[31m\nTesting oldass\033[m"
+# for binary in /tmp/test/*; do
+# 	cp hello /tmp/test2/hello
+# 	</dev/null "$binary"
+# done
+
 ./pestilence || (echo fuck segfaulted && exit)
 
-echo "\033[31m\nTesting oldass\033[m"
-for binary in $test; do
-	</dev/null "$binary" 2> /dev/null || </dev/null ./$binary
-done
-
-echo "\033[32m\nTesting Norgle'd\033[m"
+# echo "\033[32m\nTesting Norgle'd\033[m"
 for binary in /tmp/test/*; do
-	cp hello /tmp/test2/hello
-	</dev/null "$binary"
-	diff hello /tmp/test2/hello
+    ("$binary"  >/dev/null 2>&1 && (strings "$binary" | grep --silent Pest) &&  echo -n "\033[32mOK\033[m") || echo -n "\033[31mKO\033[m"
+    echo -n " " && basename "$binary"
+    rm $binary
+    sleep 1
+	# cp hello /tmp/test2/hello
+	# </dev/null "$binary"
+	# diff hello /tmp/test2/hello
 done

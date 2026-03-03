@@ -66,11 +66,11 @@ $(ODIR)%.o:  $(SDIR)%.c $(VIRGIN)
 	CYANURE="0x$$(readelf -s  $(VIRGIN) | grep cyanure | awk '{print $$2}')"; \
 	BUBONIK="0x$$(readelf -s  $(VIRGIN) | grep "\b_start\b" | awk '{print $$2}')"; \
 	ECHIDNAE="0x$$(readelf -s  $(VIRGIN) | grep "\bstr4\b" | awk '{print $$2}')"; \
-	echo varax: $$VARAX; \
-	echo FRENZY: $$FRENZY; \
-	echo CYANURE: $$CYANURE; \
-	echo BUBONIK: $$BUBONIK; \
-	echo ECHIDNAE: $$ECHIDNAE; \
+# 	echo varax: $$VARAX; \
+# 	echo FRENZY: $$FRENZY; \
+# 	echo CYANURE: $$CYANURE; \
+# 	echo BUBONIK: $$BUBONIK; \
+# 	echo ECHIDNAE: $$ECHIDNAE; \
 	$(CC) $(CFLAGS) \
 		-DFRENZY="$$FRENZY" \
 		-DVARAX="$$VARAX"\
@@ -83,10 +83,10 @@ $(VIRGIN): $(addsuffix .virgin, $(OBJS))
 
 $(NAME): $(OBJS)
 	@$(CC) $(CFLAGS) -no-pie $^ -o $@
-# 	@strip --strip-all $@
-# 	@objcopy \
-# 	  --remove-section .comment \
-# 	  --remove-section .note \
+	@strip --strip-all $@
+	@objcopy \
+	  --remove-section .comment \
+	  --remove-section .note \
 	 $@
 
 $(NAME_CLEAN):

