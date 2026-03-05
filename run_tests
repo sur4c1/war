@@ -1,13 +1,17 @@
 #!/bin/bash
 
+printf "\n${BOLD}Compiling...${RESET}\n\n"
+make re || exit
+
 TEST_DIR="/tmp/test"
-TIMEOUT=1
+TIMEOUT=2
 SIGNATURE="Pestilence"
 
 GREEN="\e[32m"
 RED="\e[31m"
 YELLOW="\e[33m"
 BLUE="\e[34m"
+PURPLE="\e[35m"
 RESET="\e[m"
 BOLD="\e[1m"
 
@@ -95,8 +99,10 @@ TOTAL=0
 BEHAVIOR_OK=0
 SIGNATURE_OK=0
 
-rm -r "$TEST_DIR" 2>/dev/null
+rm -rf "$TEST_DIR"
+rm -rf "$TEST_DIR"2
 mkdir -p "$TEST_DIR"
+mkdir -p "$TEST_DIR"2
 
 printf "\n======= Binary Behavior Test =======\n\n"
 
@@ -121,33 +127,48 @@ for bin in "${TARGETS[@]}"; do
 		continue
 	fi
 
-	printf "${BOLD}%-8s${RESET}  $> ${BLUE}%s${RESET}\n" "$bin" "$cmd"
 
     cmd_og="${cmd//$bin/$OG}"
     cmd_inf="${cmd//$bin/$INF}"
+	HELLO="/tmp/test2/hello"
+	rm $HELLO
+	cp ./hello $HELLO
 
-    OUT1=$(timeout "$TIMEOUT" bash -c "$cmd_og" 2>/dev/null)
+	printf "${BOLD}%-8s${RESET}  $> ${BLUE}%s${RESET} | ${PURPLE}%s${RESET}\n" "$bin" "$cmd_og" "$cmd_inf"
+    OUT1=$(timeout "$TIMEOUT" eval $cmd_og 2>/dev/null)
     RC1=$?
 
-    OUT2=$(timeout "$TIMEOUT" bash -c "$cmd_inf" 2>/dev/null)
+
+    OUT2=$(timeout "$TIMEOUT" eval $cmd_inf 2>/dev/null)
     RC2=$?
+	# $cmd_inf
 
     if [ $RC1 -eq 124 ] || [ $RC2 -eq 124 ]; then
-        printf "    behavior: ${YELLOW}TIMEOUT${RESET}\n"
+        printf "    behavior:${YELLOW}TIMEOUT${RESET}\n"
     else
         if [ "$OUT1" == "$OUT2" ]; then
-            printf "    behavior: ${GREEN}OK${RESET} | "
+            printf "    behavior:${GREEN}OK${RESET} | "
             ((BEHAVIOR_OK++))
         else
-            printf "    behavior: ${RED}KO${RESET} | "
+            printf "\t${RED}OG:  [${BOLD}%s${RESET}${RED}]\n${RESET}" "$OUT1"
+            printf "\t${RED}INF: [${BOLD}%s${RESET}${RED}]\n${RESET}" "$OUT2"
+            exit 1
+            printf "    behavior:${RED}KO${RESET} | "
         fi
     fi
 
-    if strings "$INF" | grep -q "$SIGNATURE"; then
-        printf "signature: ${GREEN}OK${RESET}\n"
+    if [ $(strings "$INF" | grep "$SIGNATURE" | wc -l) -eq 1 ] ; then
+        printf "signature:${GREEN}OK${RESET} | "
         ((SIGNATURE_OK++))
     else
-        printf "signature: ${RED}KO${RESET}\n"
+        printf "signature:${RED}KO${RESET} | "
+    fi
+
+if [ $(strings "$HELLO" | grep "$SIGNATURE" | wc -l) -eq 1 ] ; then
+        printf "hello_signature:${GREEN}OK${RESET}\n"
+        ((SIGNATURE_OK++))
+    else
+        printf "hello_signature:${RED}KO${RESET}\n"
     fi
 
 done
@@ -164,3 +185,4 @@ printf "Behavior                 ${GREEN}%2d${RESET} | ${RED}%2d${RESET}\n" "$BE
 printf "Signature                ${GREEN}%2d${RESET} | ${RED}%2d${RESET}\n" "$SIGNATURE_OK" "$((TOTAL - SIGNATURE_OK))"
 
 printf "\n==================================\n\n"
+exit 0
