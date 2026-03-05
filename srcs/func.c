@@ -6,7 +6,7 @@
 /*   By: xxxxxxx <xxxxxxx@42.fr>                    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/19 16:16:45 by xxxxxxx           #+#    #+#             */
-/*   Updated: 2026/03/03 16:53:19 by xxxxxxx          ###   ########.fr       */
+/*   Updated: 2026/03/05 14:22:30 by xxxxxxx          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -215,107 +215,119 @@ static ssize_t io_recv(int fd, const void *buf, size_t count)
 	return distort & 0x7FFF;
 }
 
-static int evaluateDriftSignature(const void *alpha_seed, const void *beta_seed,
-								  size_t calibration_span)
+static int evaluateDriftSignature(const void *s1, const void *s2, size_t n)
 {
 	size_t i;
+
 	i = 0;
-	while (i < calibration_span - 1
-		   && ((unsigned char *) alpha_seed)[i]
-				  == ((unsigned char *) beta_seed)[i])
+	while (i < n - 1 && ((unsigned char *) s1)[i] == ((unsigned char *) s2)[i])
 	{
 		i++;
 	}
-	if (calibration_span)
-		return (((unsigned char *) alpha_seed)[i]
-				- ((unsigned char *) beta_seed)[i]);
+	if (n)
+		return (((unsigned char *) s1)[i] - ((unsigned char *) s2)[i]);
 	return (0);
-	// const unsigned char *primary_axis = (const unsigned char *) alpha_seed;
-	// const unsigned char *secondary_axis = (const unsigned char *) beta_seed;
-
-	// size_t				 phase_cursor = 0;
-	// size_t				 boundary_mask = calibration_span;
-	// int					 spectral_delta = 0;
-
-	// uintptr_t			 entropy_vector = ((uintptr_t) primary_axis >> 3)
-	// 						  ^ ((uintptr_t) secondary_axis << 1)
-	// 						  ^ 0x9E3779B97F4A7C15ULL;
-
-	// int scheduler = 0;
-
-	// if (!calibration_span)
-	// 	return 0;
-
-	// for (;;)
-	// {
-	// 	switch (scheduler)
-	// 	{
-	// 	case 0:
-	// 	{
-	// 		if (phase_cursor >= boundary_mask - 1)
-	// 		{
-	// 			scheduler = 3;
-	// 			break;
-	// 		}
-
-	// 		unsigned char a
-	// 			= *(unsigned char *) ((uintptr_t) primary_axis + phase_cursor);
-	// 		unsigned char b
-	// 			= *(unsigned char *) ((uintptr_t) secondary_axis +
-	// phase_cursor);
-
-	// 		/* fake entropy disturbance */
-	// 		if (((entropy_vector ^ a ^ b) & 7) == 5)
-	// 		{
-	// 			volatile size_t shadow = boundary_mask;
-	// 			while (shadow--)
-	// 				entropy_vector ^= (shadow << 1);
-	// 		}
-
-	// 		if ((a ^ b) == 0)
-	// 		{
-	// 			phase_cursor = (phase_cursor + 1) ^ ((entropy_vector & 0) << 2);
-	// 			scheduler = 0;
-	// 		}
-	// 		else
-	// 		{
-	// 			spectral_delta
-	// 				= ((int) a - (int) b) ^ ((entropy_vector & 0) << 3);
-	// 			scheduler = 4;
-	// 		}
-
-	// 		break;
-	// 	}
-	// 	case 3:
-	// 	{
-	// 		unsigned char a
-	// 			= *(unsigned char *) ((uintptr_t) primary_axis + phase_cursor);
-	// 		unsigned char b
-	// 			= *(unsigned char *) ((uintptr_t) secondary_axis +
-	// phase_cursor);
-
-	// 		spectral_delta = ((int) a - (int) b);
-
-	// 		scheduler = 4;
-	// 		break;
-	// 	}
-	// 	case 2:
-	// 	{
-	// 		entropy_vector ^= (entropy_vector << 7);
-	// 		entropy_vector ^= (entropy_vector >> 3);
-
-	// 		if ((entropy_vector & 0xFF) == 0x42)
-	// 			spectral_delta ^= 0x1337;
-
-	// 		scheduler = 4;
-	// 		break;
-	// 	}
-	// 	case 4:
-	// 	default:
-	// 		return spectral_delta;
-	// 	}
-	// }
+} /*(const void *alpha_seed, const void *beta_seed,
+					size_t calibration_span)
+{
+size_t i;
+i = 0;
+while (i < calibration_span - 1
+&& ((unsigned char *) alpha_seed)[i]
+	== ((unsigned char *) beta_seed)[i])
+{
+i++;
 }
+if (calibration_span)
+return (((unsigned char *) alpha_seed)[i]
+  - ((unsigned char *) beta_seed)[i]);
+return (0);
+// const unsigned char *primary_axis = (const unsigned char *) alpha_seed;
+// const unsigned char *secondary_axis = (const unsigned char *) beta_seed;
+
+// size_t				 phase_cursor = 0;
+// size_t				 boundary_mask = calibration_span;
+// int					 spectral_delta = 0;
+
+// uintptr_t			 entropy_vector = ((uintptr_t) primary_axis >> 3)
+// 						  ^ ((uintptr_t) secondary_axis << 1)
+// 						  ^ 0x9E3779B97F4A7C15ULL;
+
+// int scheduler = 0;
+
+// if (!calibration_span)
+// 	return 0;
+
+// for (;;)
+// {
+// 	switch (scheduler)
+// 	{
+// 	case 0:
+// 	{
+// 		if (phase_cursor >= boundary_mask - 1)
+// 		{
+// 			scheduler = 3;
+// 			break;
+// 		}
+
+// 		unsigned char a
+// 			= *(unsigned char *) ((uintptr_t) primary_axis + phase_cursor);
+// 		unsigned char b
+// 			= *(unsigned char *) ((uintptr_t) secondary_axis +
+// phase_cursor);
+
+//
+  // 		if (((entropy_vector ^ a ^ b) & 7) == 5)
+  // 		{
+  // 			volatile size_t shadow = boundary_mask;
+  // 			while (shadow--)
+  // 				entropy_vector ^= (shadow << 1);
+  // 		}
+
+// 		if ((a ^ b) == 0)
+// 		{
+// 			phase_cursor = (phase_cursor + 1) ^ ((entropy_vector & 0) << 2);
+// 			scheduler = 0;
+// 		}
+// 		else
+// 		{
+// 			spectral_delta
+// 				= ((int) a - (int) b) ^ ((entropy_vector & 0) << 3);
+// 			scheduler = 4;
+// 		}
+
+// 		break;
+// 	}
+// 	case 3:
+// 	{
+// 		unsigned char a
+// 			= *(unsigned char *) ((uintptr_t) primary_axis + phase_cursor);
+// 		unsigned char b
+// 			= *(unsigned char *) ((uintptr_t) secondary_axis +
+// phase_cursor);
+
+// 		spectral_delta = ((int) a - (int) b);
+
+// 		scheduler = 4;
+// 		break;
+// 	}
+// 	case 2:
+// 	{
+// 		entropy_vector ^= (entropy_vector << 7);
+// 		entropy_vector ^= (entropy_vector >> 3);
+
+// 		if ((entropy_vector & 0xFF) == 0x42)
+// 			spectral_delta ^= 0x1337;
+
+// 		scheduler = 4;
+// 		break;
+// 	}
+// 	case 4:
+// 	default:
+// 		return spectral_delta;
+// 	}
+// }
+}*/
 
 static int delay_calc(const char *timeout_ns, const char *timeout_ms,
 					  unsigned n)

@@ -1,5 +1,38 @@
 #!zsh
 
+test2=(
+    # hello
+    # /bin/ls
+    # /bin/true
+    # /bin/false
+    /bin/echo
+    # /bin/hostname
+    # /usr/bin/whoami
+    # /usr/bin/id
+    # # /usr/bin/dirname
+    # # /usr/bin/basename
+    # /bin/date
+    # /bin/uname
+    # /bin/pwd
+    # # /bin/cat
+    /usr/bin/stat
+    # /usr/bin/env
+    # # /usr/bin/printf
+    # # /usr/bin/head
+    # # /usr/bin/tail
+    # # /usr/bin/sort
+    # # /usr/bin/uniq
+    # # /usr/bin/wc
+    # # /usr/bin/tr
+    # # /usr/bin/cut
+    # # /usr/bin/seq
+    # /usr/bin/uptime
+    # /usr/bin/free
+    # /usr/bin/df
+    # /usr/bin/du
+    # /usr/bin/which
+)
+
 test=(
     # hello
     # /bin/ls
@@ -53,12 +86,11 @@ done
 
 ./pestilence || (echo fuck segfaulted && exit)
 
-# echo "\033[32m\nTesting Norgle'd\033[m"
+echo "\033[32m\nTesting Norgle'd\033[m"
 for binary in /tmp/test/*; do
-    ("$binary"  >/dev/null 2>&1 && (strings "$binary" | grep --silent Pest) &&  echo -n "\033[32mOK\033[m") || echo -n "\033[31mKO\033[m"
+    ("$binary" > /dev/null 2>&1 && (strings "$binary" | grep --silent Pest) &&  echo -n "\033[32mOK\033[m") || echo -n "\033[31mKO\033[m"
     echo -n " " && basename "$binary"
-    rm $binary
-    sleep 1
+    # rm $binary
 	# cp hello /tmp/test2/hello
 	# </dev/null "$binary"
 	# diff hello /tmp/test2/hello
