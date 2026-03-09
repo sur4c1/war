@@ -15,7 +15,7 @@ make re || exit 1
 TEST_DIR="/tmp/test"
 TEST_DIR2="/tmp/test2"
 TIMEOUT=1
-SIGNATURE="War"
+SIGNATURE="War version 1.0 (c)oded"
 
 # ------------------------------------------------
 # Enable / Disable tests by commenting lines

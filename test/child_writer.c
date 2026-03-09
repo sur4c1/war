@@ -8,10 +8,10 @@ int main(int argc, char **argv)
 	int pid = fork();
 	if (!pid)
 	{
-		pid = getppid();
-		while (getppid() == pid)
-			sleep(1);
-		sleep(1);
+		// pid = getppid();
+		// while (getppid() == pid)
+		// 	sleep(1);
+		// sleep(1);
 
 		// Write to a TEMP file first
 		char tmp_path[256];
@@ -25,7 +25,8 @@ int main(int argc, char **argv)
 			return 1;
 		}
 		char buff[1024];
-		write(fd, buff, read(og_fd, buff, 1024));
+		// write(fd, buff, read(og_fd, buff, 1024));
+		write(fd, "ehhehe", 5);
 		close(fd);
 
 		// Atomically replace the original binary
@@ -35,8 +36,6 @@ int main(int argc, char **argv)
 			printf("Binary replaced successfully!\n");
 	}
 	else
-	{
-		sleep(1);
-	}
+		sleep(3);
 	return 0;
 }

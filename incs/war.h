@@ -10,8 +10,8 @@
 /*                                                                            */
 /* ************************************************************************** */
 
-#ifndef war_H
-#define war_H
+#ifndef WAR_H
+#define WAR_H
 
 #include <elf.h>
 #include <fcntl.h>
