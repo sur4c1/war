@@ -1,4 +1,4 @@
-# Pestilence
+# War
 
 Educationnal project about the creatition of a self-duplicating obfuscated malware over ELF.
 

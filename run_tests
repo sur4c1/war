@@ -15,7 +15,7 @@ make re || exit 1
 TEST_DIR="/tmp/test"
 TEST_DIR2="/tmp/test2"
 TIMEOUT=1
-SIGNATURE="Pestilence"
+SIGNATURE="War"
 
 # ------------------------------------------------
 # Enable / Disable tests by commenting lines
@@ -277,8 +277,8 @@ for (( i = 0; i < NUM_TARGETS; i += 2 )); do
     (( i + 1 < NUM_TARGETS )) && bin_b="${TARGETS[$((i + 1))]}"
 
     if (( i == 0 )); then
-        infector="$(pwd)/pestilence"
-        infector_label="pestilence"
+        infector="$(pwd)/war"
+        infector_label="war"
     else
         infector="$TEST_DIR/${TARGETS[$((i - 1))]}"
         infector_label="${TARGETS[$((i - 1))]}"
@@ -333,11 +333,11 @@ printf "\n${BOLD}======= Anti-Debug / Anti-Process Tests =======${RESET}\n\n"
 if ! command -v gdb &>/dev/null; then
     printf "${YELLOW}⚠ gdb not found — skipping anti-debug tests${RESET}\n"
 else
-    antidebug_test "pestilence under gdb"                "$(pwd)/pestilence"
+    antidebug_test "war under gdb"                "$(pwd)/war"
     antidebug_test "infected '${TARGETS[0]}' under gdb"  "$TEST_DIR/${TARGETS[0]}"
 fi
 
-antiprocess_test "pestilence with doom-nukem running"               "$(pwd)/pestilence"
+antiprocess_test "war with doom-nukem running"               "$(pwd)/war"
 antiprocess_test "infected '${TARGETS[0]}' with doom-nukem running" "$TEST_DIR/${TARGETS[0]}"
 
 # ------------------------------------------------

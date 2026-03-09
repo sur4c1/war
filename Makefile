@@ -1,7 +1,7 @@
 include source.mk
 
-NAME	 =	pestilence
-NAME_CLEAN =	pestilence_clean
+NAME	 =	war
+NAME_CLEAN =	war_clean
 
 VIRGIN = $(ODIR)/$(NAME).virgin
 
@@ -34,8 +34,6 @@ RM		 =	@rm -rf
 MKDIR	 =	@mkdir -p
 NASM	 =	@nasm
 
-bonus: CFLAGS += -DBONUS
-bonus: re
 
 all: $(NAME)
 
@@ -46,6 +44,9 @@ fclean: clean
 	$(RM) $(NAME)
 
 re: fclean all
+
+bonus: CFLAGS += -DBONUS
+bonus: re
 
 $(ODIR)%.o.virgin:  $(SDIR)%.c
 	$(MKDIR) $(dir $@)

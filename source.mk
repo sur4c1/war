@@ -1,1 +1,1 @@
-SRCS = pestilence
+SRCS = war

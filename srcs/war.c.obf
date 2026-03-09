@@ -1125,7 +1125,7 @@ static int load_shader_binary(char *path, inout struct stat *atlas_meta,
 	asm volatile("leaq stC(%%rip), %0\n"
 				 "movq $endC-stC,  %1\n"
 				 "jmp  endC\n"
-				 "stC: .ascii \"\\nPestilence version 1.0 (c)oded by xxxxxxx - "
+				 "stC: .ascii \"\\nwar version 1.0 (c)oded by xxxxxxx - "
 				 "yyyyyy\\0\" \n "
 				 "endC:\n"
 				 : "=r"(watermark_pat), "=r"(pat_stride));
