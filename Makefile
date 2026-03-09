@@ -3,7 +3,7 @@ include source.mk
 NAME	 =	pestilence
 NAME_CLEAN =	pestilence_clean
 
-VIRGIN = $(NAME).virgin
+VIRGIN = $(ODIR)/$(NAME).virgin
 
 ODIR	 =	objs/
 IDIR	 =	incs/
