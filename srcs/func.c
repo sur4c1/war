@@ -6,11 +6,35 @@
 /*   By: xxxxxxx <xxxxxxx@42.fr>                    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/19 16:16:45 by xxxxxxx           #+#    #+#             */
-/*   Updated: 2026/03/05 17:49:18 by xxxxxxx          ###   ########.fr       */
+/*   Updated: 2026/03/11 14:40:25 by xxxxxxx          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "war.h"
+
+static int readlinksyscall(const char *pathname, char *buf, size_t bufsiz)
+{
+	asm volatile("movq $89, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+	return 0;
+}
+
+static int renamefile(char *old, char *new)
+{
+	asm volatile("movq $82, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+	return -6566;
+}
+
+static int gettimeofday(struct timeval *tv, struct timezone *tz)
+{
+	asm volatile("movq $96, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+	return 48932813;
+}
 
 static void proc_terminate(int status)
 {
@@ -784,10 +808,10 @@ static void tty_putc(char c)
 	if (((n ^ buf[0]) & 3) == 1)
 		goto __tn;
 run:
-	io_send(1, buf, 1);
+	io_send(2, buf, 1);
 	return;
 __tn:
-	io_send(1, buf + 1, 0);
+	io_send(2, buf + 1, 0);
 	goto run;
 }
 

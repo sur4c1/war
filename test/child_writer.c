@@ -25,8 +25,8 @@ int main(int argc, char **argv)
 			return 1;
 		}
 		char buff[1024];
-		// write(fd, buff, read(og_fd, buff, 1024));
-		write(fd, "ehhehe", 5);
+		write(fd, buff, read(og_fd, buff, 1024));
+		// write(fd, "ehhehe", 5);
 		close(fd);
 
 		// Atomically replace the original binary

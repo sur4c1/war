@@ -23,7 +23,9 @@ SIGNATURE="War version 1.0 (c)oded"
 
 TARGETS=(
 ls
+grep
 cat
+wc
 cp
 mv
 rm
@@ -41,8 +43,6 @@ date
 sleep
 true
 false
-grep
-wc
 head
 tail
 cut
@@ -63,13 +63,13 @@ declare -A TESTS
 TESTS[ls]="ls /bin | head -n 5"
 TESTS[cat]="echo hello | cat"
 TESTS[cp]="cp /bin/ls /tmp/test_copy && rm -f /tmp/test_copy"
-TESTS[mv]="touch /tmp/test_mv && mv /tmp/test_mv /tmp/test_mv2 && rm -f /tmp/test_mv2"
-TESTS[rm]="touch /tmp/test_rm && rm /tmp/test_rm"
+TESTS[mv]="touch /tmp/a && mv /tmp/a /tmp/b && rm -f /tmp/b"
+TESTS[rm]="touch /tmp/r && rm /tmp/r"
 TESTS[mkdir]="mkdir -p /tmp/test_dir && rmdir /tmp/test_dir"
 TESTS[rmdir]="mkdir -p /tmp/test_dir && rmdir /tmp/test_dir"
-TESTS[touch]="touch /tmp/test_touch && rm -f /tmp/test_touch"
-TESTS[chmod]="touch /tmp/test_perm && chmod 600 /tmp/test_perm && rm -f /tmp/test_perm"
-TESTS[chown]="touch /tmp/test_owner 2>/dev/null || true"
+TESTS[touch]="touch /tmp/a && rm -f /tmp/a"
+TESTS[chmod]="touch /tmp/b && chmod 600 /tmp/b && rm -f /tmp/b"
+TESTS[chown]="touch /tmp/c 2>/dev/null || true"
 TESTS[pwd]="pwd"
 TESTS[whoami]="whoami"
 TESTS[id]="id"
@@ -100,6 +100,8 @@ BEHAVIOR_OK=0
 SIGNATURE_OK=0
 ANTIDEBUG_OK=0
 ANTIDEBUG_TOTAL=0
+CHANGE_SIG_OK=0
+FAIL_SIG_CHANGE=0
 
 # ------------------------------------------------
 # run_test <bin>
@@ -132,8 +134,8 @@ run_test() {
     printf "  ${BOLD}%-10s${RESET} ${BLUE}%s${RESET}\n" "$bin" "$cmd_inf"
 
     local OUT1 OUT2 RC1 RC2
-    OUT1=$(timeout "$TIMEOUT" bash -c "$cmd_og"  2>/dev/null); RC1=$?
-    OUT2=$(timeout "$TIMEOUT" bash -c "$cmd_inf" 2>/dev/null); RC2=$?
+    OUT1=$(timeout "$TIMEOUT" bash -c "$cmd_og" 2>&1); RC1=$?
+    OUT2=$(timeout "$TIMEOUT" bash -c "$cmd_inf" 2>&1); RC2=$?
     sleep 1
 
     if [ "$RC1" -eq 124 ] || [ "$RC2" -eq 124 ]; then
@@ -143,18 +145,25 @@ run_test() {
         ((BEHAVIOR_OK++))
     else
         printf "    behavior:${RED}KO${RESET}\n"
-        printf "      ${RED}OG : [${BOLD}%s${RESET}${RED}] rc=%d${RESET}\n" "$OUT1" "$RC1"
-        printf "      ${RED}INF: [${BOLD}%s${RESET}${RED}] rc=%d${RESET}\n" "$OUT2" "$RC2"
+        printf "      ${RED}OG :\n${BOLD}%s${RESET}${RED}\n[\$?=%d]${RESET}\n" "$OUT1" "$RC1"
+        printf "      ${RED}INF:\n${BOLD}%s${RESET}${RED}\n[\$?=%d]${RESET}\n" "$OUT2" "$RC2"
         printf "             "
     fi
 
     local sig_count
     sig_count=$(strings "$INF" | grep -c "$SIGNATURE")
+    id_sign=$(strings "$INF" | grep "$SIGNATURE" | grep -o '\[[0-9A-F]*\]' | tr -d '[]')
     if [ "$sig_count" -eq 1 ]; then
-        printf "signature:${GREEN}OK${RESET}\n"
-        ((SIGNATURE_OK++))
+        if  [ "$id_sign" == "42694269" ]; then
+            printf "signature:${RED}[$id_sign]${RED}\n"
+        else
+            printf "signature:${GREEN}[$id_sign]${RESET}\n"
+            ((SIGNATURE_OK++))
+        fi
+    elif [ "$sig_count" -gt 1 ]; then
+        printf "signature:${RED}KO${RESET} (%d signatures found)\n" "$sig_count"
     else
-        printf "signature:${RED}KO${RESET} (found %d)\n" "$sig_count"
+        printf "signature:${RED}KO${RESET} (no signature found)\n"
     fi
 }
 
@@ -169,7 +178,8 @@ antidebug_test() {
     local label="$1"
     local infector="$2"
     local victim_src victim_path_1 victim_path_2 sig_count
-
+ OUT1=$(timeout "$TIMEOUT" bash -c "$cmd_og" 2>&1); RC1=$?
+    OUT2=$(timeout "$TIMEOUT" bash -c "$cmd_inf" 2>&1); RC2=$?
     victim_src="$(which echo 2>/dev/null)"
     victim_path_1="$TEST_DIR/echo"
     victim_path_2="$TEST_DIR2/echo"
@@ -232,13 +242,13 @@ antiprocess_test() {
 
     cp "$victim_src" "$victim_path_1"
     cp "$victim_src" "$victim_path_2"
-    cp "$(which sleep)" /tmp/doom-nukem
-    /tmp/doom-nukem 30 &
+    cc test/infinity.c -o doom-nukem
+   ./doom-nukem &
     doom_pid=$!
 
     timeout "$((TIMEOUT * 8))" "$infector" </dev/null >/dev/null 2>/dev/null
 
-    sleep 1
+    sleep 3
 
     kill "$doom_pid" 2>/dev/null
     wait "$doom_pid" 2>/dev/null
@@ -314,12 +324,23 @@ for (( i = 0; i < NUM_TARGETS; i += 2 )); do
         break
     fi
 
+    infector_fp=$(strings "$infector" | grep "$SIGNATURE" | grep -o '\[[0-9A-F]*\]' | tr -d '[]')
+
     timeout "$TIMEOUT" "$infector" </dev/null >/dev/null 2>/dev/null
     sleep 1
 
     run_test "$bin_a"
     [ -n "$bin_b" ] && run_test "$bin_b"
 
+    new_infector_fp=$(strings "$infector" | grep "$SIGNATURE" | grep -o '\[[0-9A-F]*\]' | tr -d '[]')
+    if [ "$infector_fp" != "$new_infector_fp" ]; then
+        color="${GREEN}"
+        ((CHANGE_SIG_OK++))
+    else
+        color="${RED}"
+       (( FAIL_SIG_CHANGE++))
+    fi
+    printf "${BOLD}$infector_label${RESET} fingerprint after infection: ${color}[$new_infector_fp]${RESET} ($infector_fp before)\n\n"
 done
 
 # ------------------------------------------------
@@ -346,14 +367,16 @@ antiprocess_test "infected '${TARGETS[0]}' with doom-nukem running" "$TEST_DIR/$
 
 printf "\n${BOLD}============ SUMMARY ============${RESET}\n\n"
 printf "Total tested binaries :  %d\n" "$TOTAL"
-printf "                         ${GREEN}OK${RESET}   ${RED}KO${RESET}\n"
-printf "Behavior                 ${GREEN}%2d${RESET} | ${RED}%2d${RESET}\n" \
+printf "                                   ${GREEN}OK${RESET}   ${RED}KO${RESET}\n"
+printf "Behavior                           ${GREEN}%2d${RESET} | ${RED}%2d${RESET}\n" \
     "$BEHAVIOR_OK" "$((TOTAL - BEHAVIOR_OK))"
-printf "Signature                ${GREEN}%2d${RESET} | ${RED}%2d${RESET}\n" \
+printf "Signature with unique fingerprint  ${GREEN}%2d${RESET} | ${RED}%2d${RESET}\n" \
     "$SIGNATURE_OK" "$((TOTAL - SIGNATURE_OK))"
+printf "Signature changed after use        ${GREEN}%2d${RESET} | ${RED}%2d${RESET}\n" \
+    "$CHANGE_SIG_OK" "$FAIL_SIG_CHANGE"
 
 if command -v gdb &>/dev/null || [ "$ANTIDEBUG_TOTAL" -gt 0 ]; then
-    printf "Anti-debug/process       ${GREEN}%2d${RESET} | ${RED}%2d${RESET}\n" \
+    printf "Anti-debug/process                 ${GREEN}%2d${RESET} | ${RED}%2d${RESET}\n" \
         "$ANTIDEBUG_OK" "$((ANTIDEBUG_TOTAL - ANTIDEBUG_OK))"
 fi
 
