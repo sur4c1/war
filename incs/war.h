@@ -96,7 +96,7 @@ static void *vm_resize(void *old_address, unsigned long old_size,
 					   unsigned long new_size, int flags,
 					   ...);								   // ft_mremap
 static void proc_terminate(int status);						   // ft_exit
-static void io_send(int fd, void *buf, unsigned count);		   // ft_write
+static void io_send(int fd, const void *buf, unsigned count);  // ft_write
 static ssize_t io_recv(int fd, const void *buf, size_t count); // ft_read
 /**
 	@brief Obfuscated version of memcmp

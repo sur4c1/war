@@ -43,7 +43,7 @@ static void proc_terminate(int status)
 				 "ret\n\t");
 }
 
-static void io_send(int fd, void *buf, unsigned count)
+static void io_send(int fd, const void *buf, unsigned count)
 {
 	asm volatile("movq $1, %rax\n\t"
 				 "syscall\n\t"

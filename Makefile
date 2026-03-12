@@ -59,12 +59,15 @@ $(ODIR)%.o:  $(SDIR)%.c $(VIRGIN)
 	CYANURE="0x$$(readelf -s  $(VIRGIN) | grep cyanure | awk '{print $$2}')"; \
 	BUBONIK="0x$$(readelf -s  $(VIRGIN) | grep "\b_start\b" | awk '{print $$2}')"; \
 	ECHIDNAE="0x$$(readelf -s  $(VIRGIN) | grep "\bstr4\b" | awk '{print $$2}')"; \
+	ANCHOR="0x$$(readelf -s  $(VIRGIN) | grep "\banchor\b" | awk '{print $$2}')"; \
 	$(CC) $(CFLAGS) \
 		-DFRENZY="$$FRENZY" \
 		-DVARAX="$$VARAX"\
 		-DCYANURE="$$CYANURE" \
 		-DECHIDNAE="$$ECHIDNAE" \
-		-DBUBONIK="$$BUBONIK" -c $< -o $@
+		-DBUBONIK="$$BUBONIK" \
+		-DANCHOR="$$ANCHOR" \
+		-c $< -o $@
 
 $(VIRGIN): $(addsuffix .virgin, $(OBJS))
 	@$(CC) $(CFLAGS) -g -no-pie $^ -o $@
