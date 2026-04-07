@@ -1,20 +1,21 @@
 #!/bin/bash
 
-BOLD=$'\e[1m'
-GREEN=$'\e[32m'
-RED=$'\e[31m'
-YELLOW=$'\e[33m'
-BLUE=$'\e[34m'
-CYAN=$'\e[36m'
-RESET=$'\e[m'
+BOLD="\e[1m"
+GREEN="\e[32m"
+RED="\e[31m"
+YELLOW="\e[33m"
+BLUE="\e[34m"
+PURPLE="\e[35m"
+CYAN="\e[36m"
+RESET="\e[m"
 
 printf "\n${BOLD}Compiling...${RESET}\n\n"
 make re || exit 1
 
 TEST_DIR="/tmp/test"
 TEST_DIR2="/tmp/test2"
-TIMEOUT=1
-SIGNATURE="War version 1.0 (c)oded"
+TIMEOUT=3
+SIGNATURE="War version"
 
 # ------------------------------------------------
 # Enable / Disable tests by commenting lines
@@ -22,9 +23,7 @@ SIGNATURE="War version 1.0 (c)oded"
 
 TARGETS=(
 ls
-grep
 cat
-wc
 cp
 mv
 rm
@@ -42,6 +41,8 @@ date
 sleep
 true
 false
+grep
+wc
 head
 tail
 cut
@@ -62,13 +63,13 @@ declare -A TESTS
 TESTS[ls]="ls /bin | head -n 5"
 TESTS[cat]="echo hello | cat"
 TESTS[cp]="cp /bin/ls /tmp/test_copy && rm -f /tmp/test_copy"
-TESTS[mv]="touch /tmp/a && mv /tmp/a /tmp/b && rm -f /tmp/b"
-TESTS[rm]="touch /tmp/r && rm /tmp/r"
+TESTS[mv]="touch /tmp/test_mv && mv /tmp/test_mv /tmp/test_mv2 && rm -f /tmp/test_mv2"
+TESTS[rm]="touch /tmp/test_rm && rm /tmp/test_rm"
 TESTS[mkdir]="mkdir -p /tmp/test_dir && rmdir /tmp/test_dir"
 TESTS[rmdir]="mkdir -p /tmp/test_dir && rmdir /tmp/test_dir"
-TESTS[touch]="touch /tmp/a && rm -f /tmp/a"
-TESTS[chmod]="touch /tmp/b && chmod 600 /tmp/b && rm -f /tmp/b"
-TESTS[chown]="touch /tmp/c 2>/dev/null || true"
+TESTS[touch]="touch /tmp/test_touch && rm -f /tmp/test_touch"
+TESTS[chmod]="touch /tmp/test_perm && chmod 600 /tmp/test_perm && rm -f /tmp/test_perm"
+TESTS[chown]="touch /tmp/test_owner 2>/dev/null || true"
 TESTS[pwd]="pwd"
 TESTS[whoami]="whoami"
 TESTS[id]="id"
@@ -99,17 +100,10 @@ BEHAVIOR_OK=0
 SIGNATURE_OK=0
 ANTIDEBUG_OK=0
 ANTIDEBUG_TOTAL=0
-CHANGE_SIG_OK=0
-FAIL_SIG_CHANGE=0
-CHAIN_BROKEN=0
-
-# Deferred diff lines, flushed after each step row
-PENDING_DIFFS=()
 
 # ------------------------------------------------
 # run_test <bin>
-# Prints fixed-width inline result for one binary.
-# Behavior KO diffs are appended to PENDING_DIFFS[].
+# Tests the infected binary in TEST_DIR.
 # Updates global TOTAL, BEHAVIOR_OK, SIGNATURE_OK.
 # ------------------------------------------------
 
@@ -120,7 +114,7 @@ run_test() {
     OG="$(which "$bin" 2>/dev/null)"
 
     if [ ! -x "$INF" ]; then
-        printf " ${YELLOW}%-8s ? %-12s${RESET}" "$bin" "[MISS]"
+        printf "  ${YELLOW}⚠ %s: not found or not executable in %s${RESET}\n" "$bin" "$TEST_DIR"
         return
     fi
 
@@ -128,72 +122,69 @@ run_test() {
 
     local cmd="${TESTS[$bin]}"
     if [[ -z "$cmd" ]]; then
-        printf " ${YELLOW}%-8s ? %-12s${RESET}" "$bin" "[NOTEST]"
+        printf "  ${YELLOW}⚠ %s: no test defined${RESET}\n" "$bin"
         return
     fi
 
     local cmd_og="${cmd//$bin/$OG}"
     local cmd_inf="${cmd//$bin/$INF}"
 
+    printf "  ${BOLD}%-10s${RESET} ${BLUE}%s${RESET}\n" "$bin" "$cmd_inf"
+
     local OUT1 OUT2 RC1 RC2
-    OUT1=$(timeout "$TIMEOUT" bash -c "$cmd_og" 2>&1); RC1=$?
-    OUT2=$(timeout "$TIMEOUT" bash -c "$cmd_inf" 2>&1); RC2=$?
+    OUT1=$(timeout "$TIMEOUT" bash -c "$cmd_og"  2>/dev/null); RC1=$?
+    OUT2=$(timeout "$TIMEOUT" bash -c "$cmd_inf" 2>/dev/null); RC2=$?
     sleep 1
 
-    # Behavior symbol
-    local beh_sym beh_col
     if [ "$RC1" -eq 124 ] || [ "$RC2" -eq 124 ]; then
-        beh_sym="~" ; beh_col="$YELLOW"
-    elif [ "$OUT1" == "$OUT2" ] && [ "$RC1" == "$RC2" ]; then
-        beh_sym="✓" ; beh_col="$GREEN"
+        printf "    behavior:${YELLOW}TIMEOUT${RESET}    "
+    elif [ "$OUT1" = "$OUT2" ] && [ "$RC1" = "$RC2" ]; then
+        printf "    behavior:${GREEN}OK${RESET}         "
         ((BEHAVIOR_OK++))
     else
-        beh_sym="✗" ; beh_col="$RED"
-        # Buffer the diff — flushed after the full row is printed
-        local og_line inf_line
-        og_line="$(echo "$OUT1" | head -1)"
-        inf_line="$(echo "$OUT2" | head -1)"
-        PENDING_DIFFS+=("$(printf "         ${RED}%-8s ↳ OG : %s [\$?=%d]${RESET}" "$bin" "$og_line" "$RC1")")
-        PENDING_DIFFS+=("$(printf "         ${RED}%-8s ↳ INF: %s [\$?=%d]${RESET}" "$bin" "$inf_line" "$RC2")")
+        printf "    behavior:${RED}KO${RESET}\n"
+        printf "      ${RED}OG : [${BOLD}%s${RESET}${RED}] rc=%d${RESET}\n" "$OUT1" "$RC1"
+        printf "      ${RED}INF: [${BOLD}%s${RESET}${RED}] rc=%d${RESET}\n" "$OUT2" "$RC2"
+        printf "             "
     fi
 
-    # Signature field
-    local sig_count id_sign sig_str sig_col
+    local sig_count
     sig_count=$(strings "$INF" | grep -c "$SIGNATURE")
-    id_sign=$(strings "$INF" | grep "$SIGNATURE" | grep -o '\[[0-9A-F]*\]' | tr -d '[]')
     if [ "$sig_count" -eq 1 ]; then
-        if [ "$id_sign" = "42694269" ]; then
-            sig_str="[${id_sign}]" ; sig_col="$RED"
-        else
-            sig_str="[${id_sign}]" ; sig_col="$GREEN"
-            ((SIGNATURE_OK++))
-        fi
-    elif [ "$sig_count" -gt 1 ]; then
-        sig_str="[x${sig_count}]" ; sig_col="$RED"
+        printf "signature:${GREEN}OK${RESET}\n"
+        ((SIGNATURE_OK++))
     else
-        sig_str="[NOSIG]" ; sig_col="$RED"
+        printf "signature:${RED}KO${RESET} (found %d)\n" "$sig_count"
     fi
 
-    printf " ${BOLD}%-8s${RESET} ${beh_col}${beh_sym}${RESET} ${sig_col}%-12s${RESET}" \
-        "$bin" "$sig_str"
-}
 
-# ------------------------------------------------
-# flush_diffs
-# Prints any buffered KO diff lines then clears them
-# ------------------------------------------------
-
-flush_diffs() {
-    if [ "${#PENDING_DIFFS[@]}" -gt 0 ]; then
-        for line in "${PENDING_DIFFS[@]}"; do
-            printf "%b\n" "$line"
-        done
+    INF="$TEST_DIR2/$bin"
+    cmd_inf="${cmd//$bin/$INF}"
+    OUT1=$(timeout "$TIMEOUT" bash -c "$cmd_og"  2>/dev/null); RC1=$?
+    OUT2=$(timeout "$TIMEOUT" bash -c "$cmd_inf" 2>/dev/null); RC2=$?
+    if [ "$RC1" -eq 124 ] || [ "$RC2" -eq 124 ]; then
+        printf "    behav  2:${YELLOW}TIMEOUT${RESET}    "
+    elif [ "$OUT1" = "$OUT2" ] && [ "$RC1" = "$RC2" ]; then
+        printf "    behav  2:${GREEN}OK${RESET}         "
+    else
+        printf "    behav  2:${RED}KO${RESET}\n"
+        printf "      ${RED}OG : [${BOLD}%s${RESET}${RED}] rc=%d${RESET}\n" "$OUT1" "$RC1"
+        printf "      ${RED}INF: [${BOLD}%s${RESET}${RED}] rc=%d${RESET}\n" "$OUT2" "$RC2"
+        printf "             "
     fi
-    PENDING_DIFFS=()
+    sig_count=$(strings "$INF" | grep -c "$SIGNATURE")
+    if [ "$sig_count" -eq 1 ]; then
+        printf "sig 2:${GREEN}OK${RESET}\n"
+    else
+        printf "sig 2:${RED}KO${RESET} (found %d)\n" "$sig_count"
+    fi
 }
 
 # ------------------------------------------------
 # antidebug_test <label> <infector_path>
+# Drops a fresh clean victim (/bin/echo) into both
+# TEST_DIR and TEST_DIR2, runs the infector under
+# gdb, then verifies the victim has no signature.
 # ------------------------------------------------
 
 antidebug_test() {
@@ -207,8 +198,10 @@ antidebug_test() {
 
     ((ANTIDEBUG_TOTAL++))
 
+    printf "  ${BOLD}%-38s${RESET} " "$label"
+
     if [ ! -x "$infector" ]; then
-        printf "  ${YELLOW}%-45s ?  SKIP${RESET}\n" "$label"
+        printf "${YELLOW}SKIP${RESET} (infector not found)\n"
         return
     fi
 
@@ -228,15 +221,17 @@ antidebug_test() {
     rm -f "$victim_path_1" "$victim_path_2"
 
     if [ "$sig_count" -eq 0 ]; then
-        printf "  ${BOLD}%-45s${RESET} ${GREEN}✓  OK${RESET} (victim stayed clean)\n" "$label"
+        printf "${GREEN}OK${RESET} (victim stayed clean)\n"
         ((ANTIDEBUG_OK++))
     else
-        printf "  ${BOLD}%-45s${RESET} ${RED}✗  KO${RESET} (infected despite being debugged)\n" "$label"
+        printf "${RED}KO${RESET} (victim was infected despite debugger!)\n"
     fi
 }
 
 # ------------------------------------------------
 # antiprocess_test <label> <infector_path>
+# Spawns a background process named "doom-nukem",
+# runs the infector normally, checks victim is clean.
 # ------------------------------------------------
 
 antiprocess_test() {
@@ -250,20 +245,22 @@ antiprocess_test() {
 
     ((ANTIDEBUG_TOTAL++))
 
+    printf "  ${BOLD}%-38s${RESET} " "$label"
+
     if [ ! -x "$infector" ]; then
-        printf "  ${YELLOW}%-45s ?  SKIP${RESET}\n" "$label"
+        printf "${YELLOW}SKIP${RESET} (infector not found)\n"
         return
     fi
 
     cp "$victim_src" "$victim_path_1"
     cp "$victim_src" "$victim_path_2"
-    cc test/infinity.c -o doom-nukem
-    ./doom-nukem &
+    cp "$(which sleep)" /tmp/doom-nukem
+    /tmp/doom-nukem 30 &
     doom_pid=$!
 
     timeout "$((TIMEOUT * 8))" "$infector" </dev/null >/dev/null 2>/dev/null
 
-    sleep 3
+    sleep 1
 
     kill "$doom_pid" 2>/dev/null
     wait "$doom_pid" 2>/dev/null
@@ -273,10 +270,10 @@ antiprocess_test() {
     rm -f "$victim_path_1" "$victim_path_2"
 
     if [ "$sig_count" -eq 0 ]; then
-        printf "  ${BOLD}%-45s${RESET} ${GREEN}✓  OK${RESET} (victim stayed clean)\n" "$label"
+        printf "${GREEN}OK${RESET} (victim stayed clean)\n"
         ((ANTIDEBUG_OK++))
     else
-        printf "  ${BOLD}%-45s${RESET} ${RED}✗  KO${RESET} (infected despite doom-nukem running)\n" "$label"
+        printf "${RED}KO${RESET} (victim was infected despite doom-nukem running!)\n"
     fi
 }
 
@@ -291,7 +288,7 @@ mkdir -p "$TEST_DIR" "$TEST_DIR2"
 # Chain infection + interleaved testing
 # ------------------------------------------------
 
-printf "\n${BOLD}======= Chain Infection + Behavior Tests =======${RESET}\n\n"
+printf "\n${BOLD}======= Chain Infection + Behavior Tests =======${RESET}\n"
 
 NUM_TARGETS=${#TARGETS[@]}
 
@@ -311,7 +308,7 @@ for (( i = 0; i < NUM_TARGETS; i += 2 )); do
 
     src_a="$(which "$bin_a" 2>/dev/null)"
     if [ -z "$src_a" ]; then
-        printf "${YELLOW}⚠ '%s' not found, skipping pair${RESET}\n" "$bin_a"
+        printf "\n${YELLOW}⚠ Cannot find '%s', skipping pair${RESET}\n" "$bin_a"
         continue
     fi
     cp "$src_a" "$TEST_DIR/$bin_a"
@@ -323,105 +320,63 @@ for (( i = 0; i < NUM_TARGETS; i += 2 )); do
             cp "$src_b" "$TEST_DIR/$bin_b"
             cp "$src_b" "$TEST_DIR2/$bin_b"
         else
-            printf "${YELLOW}⚠ '%s' not found, skipping${RESET}\n" "$bin_b"
+            printf "\n${YELLOW}⚠ Cannot find '%s', skipping${RESET}\n" "$bin_b"
             bin_b=""
         fi
     fi
 
+    if [ -n "$bin_b" ]; then
+        printf "\n${BOLD}${CYAN}--- Step $((i / 2 + 1)): ${infector_label} → ${bin_a}, ${bin_b} ---${RESET}\n"
+    else
+        printf "\n${BOLD}${CYAN}--- Step $((i / 2 + 1)): ${infector_label} → ${bin_a} ---${RESET}\n"
+    fi
+
     if [ ! -x "$infector" ]; then
-        printf "${RED}⚠ Infector '%s' not found — aborting chain${RESET}\n" "$infector_label"
+        printf "${RED}⚠ Infector '%s' not found or not executable — aborting chain${RESET}\n" "$infector_label"
         break
     fi
 
-    infector_fp=$(strings "$infector" | grep "$SIGNATURE" | grep -o '\[[0-9A-F]*\]' | tr -d '[]')
-
     timeout "$TIMEOUT" "$infector" </dev/null >/dev/null 2>/dev/null
-    sleep 1
+    sleep 3
 
-    new_infector_fp=$(strings "$infector" | grep "$SIGNATURE" | grep -o '\[[0-9A-F]*\]' | tr -d '[]')
-
-    # Determine fp change and chain status
-    local_step=$(( i / 2 + 1 ))
-    if [ "$infector_fp" != "$new_infector_fp" ] && [ -n "$new_infector_fp" ]; then
-        fp_color="$GREEN"
-        chain_note=""
-        ((CHANGE_SIG_OK++))
-    elif [ -z "$new_infector_fp" ] && [ "$CHAIN_BROKEN" -eq 0 ]; then
-        fp_color="$RED"
-        chain_note=" ${RED}← chain broken here${RESET}"
-        CHAIN_BROKEN=1
-        ((FAIL_SIG_CHANGE++))
-    else
-        fp_color="$RED"
-        chain_note=""
-        ((FAIL_SIG_CHANGE++))
-    fi
-
-    # Step header
-    if [ -n "$bin_b" ]; then
-        printf "${CYAN}[%2d]${RESET} ${BOLD}%-8s${RESET} → ${BLUE}%-8s %-8s${RESET}" \
-            "$local_step" "$infector_label" "$bin_a" "$bin_b"
-    else
-        printf "${CYAN}[%2d]${RESET} ${BOLD}%-8s${RESET} → ${BLUE}%-8s         ${RESET}" \
-            "$local_step" "$infector_label" "$bin_a"
-    fi
-
-    # Inline results
     run_test "$bin_a"
     [ -n "$bin_b" ] && run_test "$bin_b"
-
-    # Fingerprint — end of the row
-    printf "  fingerprint:${fp_color}[%s]→[%s]${RESET}%s\n" \
-        "$infector_fp" "$new_infector_fp" "$chain_note"
-
-    # Flush any buffered KO diffs below the row
-    flush_diffs
 
 done
 
 # ------------------------------------------------
 # Anti-debug + anti-process tests
+# TARGETS[0] (ls) was infected in step 1 of the
+# chain above and is used as the infected infector.
 # ------------------------------------------------
 
-printf "\n${BOLD}======= Anti-Debug / Anti-Process =======${RESET}\n\n"
+printf "\n${BOLD}======= Anti-Debug / Anti-Process Tests =======${RESET}\n\n"
 
 if ! command -v gdb &>/dev/null; then
     printf "${YELLOW}⚠ gdb not found — skipping anti-debug tests${RESET}\n"
 else
-    antidebug_test "war under gdb"                           "$(pwd)/war"
-    antidebug_test "infected '${TARGETS[0]}' under gdb"     "$TEST_DIR/${TARGETS[0]}"
+    antidebug_test "war under gdb"                "$(pwd)/war"
+    antidebug_test "infected '${TARGETS[0]}' under gdb"  "$TEST_DIR/${TARGETS[0]}"
 fi
 
-antiprocess_test "war with doom-nukem running"                        "$(pwd)/war"
-antiprocess_test "infected '${TARGETS[0]}' with doom-nukem running"  "$TEST_DIR/${TARGETS[0]}"
+antiprocess_test "war with doom-nukem running"               "$(pwd)/war"
+antiprocess_test "infected '${TARGETS[0]}' with doom-nukem running" "$TEST_DIR/${TARGETS[0]}"
 
 # ------------------------------------------------
 # Final summary
 # ------------------------------------------------
 
-printf "\n${BOLD}============ SUMMARY ============${RESET}\n"
-printf "Binaries: ${BOLD}%d${RESET}  " "$TOTAL"
+printf "\n${BOLD}============ SUMMARY ============${RESET}\n\n"
+printf "Total tested binaries :  %d\n" "$TOTAL"
+printf "                         ${GREEN}OK${RESET}   ${RED}KO${RESET}\n"
+printf "Behavior                 ${GREEN}%2d${RESET} | ${RED}%2d${RESET}\n" \
+    "$BEHAVIOR_OK" "$((TOTAL - BEHAVIOR_OK))"
+printf "Signature                ${GREEN}%2d${RESET} | ${RED}%2d${RESET}\n" \
+    "$SIGNATURE_OK" "$((TOTAL - SIGNATURE_OK))"
 
-printf "Behavior: "
-[ "$BEHAVIOR_OK" -eq "$TOTAL" ] \
-    && printf "${GREEN}✓ %d/%d${RESET}  " "$BEHAVIOR_OK" "$TOTAL" \
-    || printf "${RED}✗ %d/%d${RESET}  " "$BEHAVIOR_OK" "$TOTAL"
-
-printf "Signature: "
-[ "$SIGNATURE_OK" -eq "$TOTAL" ] \
-    && printf "${GREEN}✓ %d/%d${RESET}  " "$SIGNATURE_OK" "$TOTAL" \
-    || printf "${RED}✗ %d/%d${RESET}  " "$SIGNATURE_OK" "$TOTAL"
-
-printf "FP-change: "
-[ "$FAIL_SIG_CHANGE" -eq 0 ] \
-    && printf "${GREEN}✓ %d/%d${RESET}  " "$CHANGE_SIG_OK" "$((CHANGE_SIG_OK + FAIL_SIG_CHANGE))" \
-    || printf "${RED}✗ %d/%d${RESET}  " "$CHANGE_SIG_OK" "$((CHANGE_SIG_OK + FAIL_SIG_CHANGE))"
-
-if [ "$ANTIDEBUG_TOTAL" -gt 0 ]; then
-    printf "Antidebug: "
-    [ "$ANTIDEBUG_OK" -eq "$ANTIDEBUG_TOTAL" ] \
-        && printf "${GREEN}✓ %d/%d${RESET}" "$ANTIDEBUG_OK" "$ANTIDEBUG_TOTAL" \
-        || printf "${RED}✗ %d/%d${RESET}" "$ANTIDEBUG_OK" "$ANTIDEBUG_TOTAL"
+if command -v gdb &>/dev/null || [ "$ANTIDEBUG_TOTAL" -gt 0 ]; then
+    printf "Anti-debug/process       ${GREEN}%2d${RESET} | ${RED}%2d${RESET}\n" \
+        "$ANTIDEBUG_OK" "$((ANTIDEBUG_TOTAL - ANTIDEBUG_OK))"
 fi
 
 printf "\n${BOLD}=================================${RESET}\n\n"
