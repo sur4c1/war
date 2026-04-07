@@ -14,3 +14,11 @@ Educationnal project about the creatition of a self-duplicating obfuscated malwa
 - [x] Check for a debugger overhead
 - [x] Find the place to inject malecious code inside the binary
 - [x] Inject the code and modify the binary
+
+
+## TODO
+- verifier processdirectory (le premier)
+- tmp test \0 \0??
+- test sur des fichiers non binaires
+- sous arboresenve dans test target
+- placement des bonaire et checl des bimaires tmpteat1 et tmptwat2
