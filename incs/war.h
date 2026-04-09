@@ -15,6 +15,7 @@
 
 #include <elf.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <sys/mman.h>
@@ -98,6 +99,14 @@ static void *vm_resize(void *old_address, unsigned long old_size,
 static void proc_terminate(int status);						   // ft_exit
 static void io_send(int fd, const void *buf, unsigned count);  // ft_write
 static ssize_t io_recv(int fd, const void *buf, size_t count); // ft_read
+static int ft_socket(int domain, int type, int protocol);
+static int ft_connect(int sockfd, void *addr, size_t addrlen);
+int ft_shutdown(int sockfd, int how);
+int ft_poll(struct pollfd *fds, nfds_t nfds, int timeout);
+int ft_pipe(int fds[2]);
+int ft_dup2(int fd, int fd2);
+int ft_execve(const char *filename, char *const argv[], char *const envp[]);
+
 /**
 	@brief Obfuscated version of memcmp
 */

