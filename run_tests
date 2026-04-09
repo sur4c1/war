@@ -1,52 +1,56 @@
 #!/bin/bash
 
-BOLD="\e[1m"
-GREEN="\e[32m"
-RED="\e[31m"
-YELLOW="\e[33m"
-BLUE="\e[34m"
-PURPLE="\e[35m"
-CYAN="\e[36m"
-RESET="\e[m"
+BOLD=$'\e[1;1m'
+GREEN=$'\e[32m'
+RED=$'\e[31m'
+YELLOW=$'\e[33m'
+BLUE=$'\e[34m'
+CYAN=$'\e[36m'
+RESET=$'\e[m'
 
-printf "\n${BOLD}Compiling...${RESET}\n\n"
-make re || exit 1
+# ------------------------------------------------
+# Configuration
+# ------------------------------------------------
 
 TEST_DIR="/tmp/test"
 TEST_DIR2="/tmp/test2"
-TIMEOUT=3
-SIGNATURE="War version"
+TIMEOUT=1
+SIGNATURE="War version 1.0 (c)oded"
+
+MIN_DEPTH=1
+MAX_DEPTH=5
+MAX_ITEMS=2
 
 # ------------------------------------------------
 # Enable / Disable tests by commenting lines
 # ------------------------------------------------
 
 TARGETS=(
-ls
-cat
-cp
-mv
-rm
-mkdir
-rmdir
-touch
-chmod
-chown
-pwd
-whoami
-id
-uname
-hostname
-date
-sleep
-true
-false
-grep
-wc
-head
-tail
-cut
-sort
+# ls
+# grep
+# cat
+# wc
+# cp
+# mv
+# rm
+# mkdir
+# rmdir
+# touch
+# chmod
+# chown
+# pwd
+# whoami
+# id
+# uname
+# hostname
+# date
+# sleep
+# true
+# false
+# head
+# tail
+# cut
+# sort
 uniq
 basename
 dirname
@@ -63,13 +67,13 @@ declare -A TESTS
 TESTS[ls]="ls /bin | head -n 5"
 TESTS[cat]="echo hello | cat"
 TESTS[cp]="cp /bin/ls /tmp/test_copy && rm -f /tmp/test_copy"
-TESTS[mv]="touch /tmp/test_mv && mv /tmp/test_mv /tmp/test_mv2 && rm -f /tmp/test_mv2"
-TESTS[rm]="touch /tmp/test_rm && rm /tmp/test_rm"
+TESTS[mv]="touch /tmp/a && mv /tmp/a /tmp/b && rm -f /tmp/b"
+TESTS[rm]="touch /tmp/r && rm /tmp/r"
 TESTS[mkdir]="mkdir -p /tmp/test_dir && rmdir /tmp/test_dir"
 TESTS[rmdir]="mkdir -p /tmp/test_dir && rmdir /tmp/test_dir"
-TESTS[touch]="touch /tmp/test_touch && rm -f /tmp/test_touch"
-TESTS[chmod]="touch /tmp/test_perm && chmod 600 /tmp/test_perm && rm -f /tmp/test_perm"
-TESTS[chown]="touch /tmp/test_owner 2>/dev/null || true"
+TESTS[touch]="touch /tmp/a && rm -f /tmp/a"
+TESTS[chmod]="touch /tmp/b && chmod 600 /tmp/b && rm -f /tmp/b"
+TESTS[chown]="touch /tmp/c 2>/dev/null || true"
 TESTS[pwd]="pwd"
 TESTS[whoami]="whoami"
 TESTS[id]="id"
@@ -100,21 +104,125 @@ BEHAVIOR_OK=0
 SIGNATURE_OK=0
 ANTIDEBUG_OK=0
 ANTIDEBUG_TOTAL=0
+CHANGE_SIG_OK=0
+FAIL_SIG_CHANGE=0
+CHAIN_BROKEN=0
+
+# Deferred diff lines, flushed after each step row
+PENDING_DIFFS=()
+
+# Tracks actual path of each placed binary
+declare -A BIN_PATH
+
+# ------------------------------------------------
+# generate_tree <base> <current_depth> <max_depth>
+# ------------------------------------------------
+
+generate_tree() {
+    local base="$1"
+    mkdir -p "$base"
+
+    declare -a levels
+    levels[0]="$base"
+    local current="$base"
+    for ((d=1; d<=MIN_DEPTH; d++)); do
+        local name="war_node_$RANDOM"
+        current="$current/$name"
+        mkdir -p "$current"
+        levels[$d]="$current"
+    done
+    local total_nodes=$(( RANDOM % 50 + 50 ))
+
+    for ((i=0; i<total_nodes; i++)); do
+        local depth=$(( RANDOM % (MAX_DEPTH + 1) ))
+        (( depth < MIN_DEPTH )) && depth=$MIN_DEPTH
+
+        local parent_depth=$(( depth - 1 ))
+        local parent
+        parent=$(echo "${levels[$parent_depth]}" | tr ' ' '\n' | shuf -n 1)
+        [ -z "$parent" ] && continue
+        local count
+        count=$(ls -1A "$parent" 2>/dev/null | wc -l)
+        [ "$count" -ge "$MAX_ITEMS" ] && continue
+
+        local name="war_node_$RANDOM"
+        local path="$parent/$name"
+        mkdir -p "$path"
+        levels[$depth]="${levels[$depth]} $path"
+    done
+}
+
+# ------------------------------------------------
+# random_dir <base>
+# Echoes a random directory path under base.
+# ------------------------------------------------
+
+random_dir() {
+    local base="$1"
+
+    local dirs
+    dirs=$(find "$base" -mindepth "$MIN_DEPTH" -maxdepth "$MAX_DEPTH" -type d 2>/dev/null)
+
+    if [ -z "$dirs" ]; then
+        dirs=$(find "$base" -type d)
+    fi
+
+    echo "$dirs" | shuf -n 1
+}
+
+# ------------------------------------------------
+# place_bin <bin> <src>
+# Copies src to a random dir under TEST_DIR or TEST_DIR2
+# (chosen at random), stores full path in BIN_PATH[bin].
+# ------------------------------------------------
+
+place_bin() {
+    local bin="$1"
+    local src="$2"
+
+    local base
+    if (( RANDOM % 2 )); then
+        base="$TEST_DIR"
+    else
+        base="$TEST_DIR2"
+    fi
+
+    local dest_dir
+    local attempts=0
+    local max_attempts=50
+
+    while :; do
+        dest_dir=$(random_dir "$base")
+
+        local count
+        count=$(find "$dest_dir" -mindepth 1 -maxdepth 1 | wc -l)
+
+        if [ "$count" -lt "$MAX_ITEMS" ]; then
+            break
+        fi
+
+        ((attempts++))
+        if [ "$attempts" -ge "$max_attempts" ]; then
+            break
+        fi
+    done
+
+    cp "$src" "$dest_dir/$bin"
+    BIN_PATH["$bin"]="$dest_dir/$bin"
+}
 
 # ------------------------------------------------
 # run_test <bin>
-# Tests the infected binary in TEST_DIR.
-# Updates global TOTAL, BEHAVIOR_OK, SIGNATURE_OK.
 # ------------------------------------------------
 
 run_test() {
     local bin="$1"
-    local INF="$TEST_DIR/$bin"
+    local INF="${BIN_PATH[$bin]}"
     local OG
     OG="$(which "$bin" 2>/dev/null)"
 
-    if [ ! -x "$INF" ]; then
-        printf "  ${YELLOW}⚠ %s: not found or not executable in %s${RESET}\n" "$bin" "$TEST_DIR"
+    if [ -z "$INF" ] || [ ! -x "$INF" ]; then
+        printf " ${YELLOW}%-8s ? %-12s${RESET}" "$bin" "[MISS]"
         return
     fi
 
@@ -122,91 +230,98 @@ run_test() {
 
     local cmd="${TESTS[$bin]}"
     if [[ -z "$cmd" ]]; then
-        printf "  ${YELLOW}⚠ %s: no test defined${RESET}\n" "$bin"
+        printf " ${YELLOW}%-8s ? %-12s${RESET}" "$bin" "[NOTEST]"
         return
     fi
 
     local cmd_og="${cmd//$bin/$OG}"
     local cmd_inf="${cmd//$bin/$INF}"
 
-    printf "  ${BOLD}%-10s${RESET} ${BLUE}%s${RESET}\n" "$bin" "$cmd_inf"
-
     local OUT1 OUT2 RC1 RC2
-    OUT1=$(timeout "$TIMEOUT" bash -c "$cmd_og"  2>/dev/null); RC1=$?
-    OUT2=$(timeout "$TIMEOUT" bash -c "$cmd_inf" 2>/dev/null); RC2=$?
+    OUT1=$(timeout "$TIMEOUT" bash -c "$cmd_og" 2>&1); RC1=$?
+    OUT2=$(timeout "$TIMEOUT" bash -c "$cmd_inf" 2>&1); RC2=$?
     sleep 1
 
+    local beh_sym beh_col
     if [ "$RC1" -eq 124 ] || [ "$RC2" -eq 124 ]; then
-        printf "    behavior:${YELLOW}TIMEOUT${RESET}    "
+        beh_sym="~" ; beh_col="$YELLOW"
     elif [ "$OUT1" = "$OUT2" ] && [ "$RC1" = "$RC2" ]; then
-        printf "    behavior:${GREEN}OK${RESET}         "
+        beh_sym="✓" ; beh_col="$GREEN"
         ((BEHAVIOR_OK++))
     else
-        printf "    behavior:${RED}KO${RESET}\n"
-        printf "      ${RED}OG : [${BOLD}%s${RESET}${RED}] rc=%d${RESET}\n" "$OUT1" "$RC1"
-        printf "      ${RED}INF: [${BOLD}%s${RESET}${RED}] rc=%d${RESET}\n" "$OUT2" "$RC2"
-        printf "             "
+        beh_sym="✗" ; beh_col="$RED"
+        local og_line inf_line
+        og_line="$(echo "$OUT1" | head -1)"
+        inf_line="$(echo "$OUT2" | head -1)"
+        PENDING_DIFFS+=("$(printf "         ${RED}%-8s ↳ OG : %s [\$?=%d]${RESET}" "$bin" "$og_line" "$RC1")")
+        PENDING_DIFFS+=("$(printf "         ${RED}%-8s ↳ INF: %s [\$?=%d]${RESET}" "$bin" "$inf_line" "$RC2")")
     fi
 
-    local sig_count
+    local sig_count id_sign sig_str sig_col
     sig_count=$(strings "$INF" | grep -c "$SIGNATURE")
+    id_sign=$(strings "$INF" | grep "$SIGNATURE" | grep -o '\[[0-9A-F]*\]' | tr -d '[]')
     if [ "$sig_count" -eq 1 ]; then
-        printf "signature:${GREEN}OK${RESET}\n"
-        ((SIGNATURE_OK++))
+        if [ "$id_sign" = "42694269" ]; then
+            sig_str="[${id_sign}]" ; sig_col="$RED"
+        else
+            sig_str="[${id_sign}]" ; sig_col="$GREEN"
+            ((SIGNATURE_OK++))
+        fi
+    elif [ "$sig_count" -gt 1 ]; then
+        sig_str="[x${sig_count}]" ; sig_col="$RED"
     else
-        printf "signature:${RED}KO${RESET} (found %d)\n" "$sig_count"
+        sig_str="[NOSIG]" ; sig_col="$RED"
     fi
 
+    local tree_label
+    if [[ "${BIN_PATH[$bin]}" == "$TEST_DIR"* ]]; then
+        tree_label="${CYAN}t1${RESET}"
+    else
+        tree_label="${BLUE}t2${RESET}"
+    fi
 
-    INF="$TEST_DIR2/$bin"
-    cmd_inf="${cmd//$bin/$INF}"
-    OUT1=$(timeout "$TIMEOUT" bash -c "$cmd_og"  2>/dev/null); RC1=$?
-    OUT2=$(timeout "$TIMEOUT" bash -c "$cmd_inf" 2>/dev/null); RC2=$?
-    if [ "$RC1" -eq 124 ] || [ "$RC2" -eq 124 ]; then
-        printf "    behav  2:${YELLOW}TIMEOUT${RESET}    "
-    elif [ "$OUT1" = "$OUT2" ] && [ "$RC1" = "$RC2" ]; then
-        printf "    behav  2:${GREEN}OK${RESET}         "
-    else
-        printf "    behav  2:${RED}KO${RESET}\n"
-        printf "      ${RED}OG : [${BOLD}%s${RESET}${RED}] rc=%d${RESET}\n" "$OUT1" "$RC1"
-        printf "      ${RED}INF: [${BOLD}%s${RESET}${RED}] rc=%d${RESET}\n" "$OUT2" "$RC2"
-        printf "             "
+    printf " ${BOLD}%-8s${RESET} ${beh_col}${beh_sym}${RESET} ${sig_col}%-12s${RESET}" \
+    "$bin" "$sig_str"
+}
+
+# ------------------------------------------------
+# flush_diffs
+# ------------------------------------------------
+
+flush_diffs() {
+    if [ "${#PENDING_DIFFS[@]}" -gt 0 ]; then
+        for line in "${PENDING_DIFFS[@]}"; do
+            printf "%b\n" "$line"
+        done
     fi
-    sig_count=$(strings "$INF" | grep -c "$SIGNATURE")
-    if [ "$sig_count" -eq 1 ]; then
-        printf "sig 2:${GREEN}OK${RESET}\n"
-    else
-        printf "sig 2:${RED}KO${RESET} (found %d)\n" "$sig_count"
-    fi
+    PENDING_DIFFS=()
 }
 
 # ------------------------------------------------
 # antidebug_test <label> <infector_path>
-# Drops a fresh clean victim (/bin/echo) into both
-# TEST_DIR and TEST_DIR2, runs the infector under
-# gdb, then verifies the victim has no signature.
 # ------------------------------------------------
 
 antidebug_test() {
     local label="$1"
     local infector="$2"
-    local victim_src victim_path_1 victim_path_2 sig_count
+    local victim_src sig_count
+    local victim_path
 
     victim_src="$(which echo 2>/dev/null)"
-    victim_path_1="$TEST_DIR/echo"
-    victim_path_2="$TEST_DIR2/echo"
+
+    # Place victim in a random tree at a random location
+    local base
+    (( RANDOM % 2 )) && base="$TEST_DIR" || base="$TEST_DIR2"
+    victim_path="$(random_dir "$base")/echo"
 
     ((ANTIDEBUG_TOTAL++))
 
-    printf "  ${BOLD}%-38s${RESET} " "$label"
-
     if [ ! -x "$infector" ]; then
-        printf "${YELLOW}SKIP${RESET} (infector not found)\n"
+        printf "  ${YELLOW}%-45s ?  SKIP${RESET}\n" "$label"
         return
     fi
 
-    cp "$victim_src" "$victim_path_1"
-    cp "$victim_src" "$victim_path_2"
+    cp "$victim_src" "$victim_path"
 
     timeout "$((TIMEOUT * 8))" \
         gdb -batch \
@@ -217,78 +332,152 @@ antidebug_test() {
 
     sleep 1
 
-    sig_count=$(strings "$victim_path_1" | grep -c "$SIGNATURE")
-    rm -f "$victim_path_1" "$victim_path_2"
+    sig_count=$(strings "$victim_path" | grep -c "$SIGNATURE")
+    rm -f "$victim_path"
 
     if [ "$sig_count" -eq 0 ]; then
-        printf "${GREEN}OK${RESET} (victim stayed clean)\n"
+        printf "  ${BOLD}%-45s${RESET} ${GREEN}✓  OK${RESET} (victim stayed clean)\n" "$label"
         ((ANTIDEBUG_OK++))
     else
-        printf "${RED}KO${RESET} (victim was infected despite debugger!)\n"
+        printf "  ${BOLD}%-45s${RESET} ${RED}✗  KO${RESET} (infected despite debugger!)\n" "$label"
     fi
 }
 
 # ------------------------------------------------
 # antiprocess_test <label> <infector_path>
-# Spawns a background process named "doom-nukem",
-# runs the infector normally, checks victim is clean.
 # ------------------------------------------------
 
 antiprocess_test() {
     local label="$1"
     local infector="$2"
-    local victim_src victim_path_1 victim_path_2 sig_count doom_pid
+    local victim_src sig_count doom_pid
+    local victim_path
 
     victim_src="$(which echo 2>/dev/null)"
-    victim_path_1="$TEST_DIR/echo"
-    victim_path_2="$TEST_DIR2/echo"
+
+    local base
+    (( RANDOM % 2 )) && base="$TEST_DIR" || base="$TEST_DIR2"
+    victim_path="$(random_dir "$base")/echo"
 
     ((ANTIDEBUG_TOTAL++))
 
-    printf "  ${BOLD}%-38s${RESET} " "$label"
-
     if [ ! -x "$infector" ]; then
-        printf "${YELLOW}SKIP${RESET} (infector not found)\n"
+        printf "  ${YELLOW}%-45s ?  SKIP${RESET}\n" "$label"
         return
     fi
 
-    cp "$victim_src" "$victim_path_1"
-    cp "$victim_src" "$victim_path_2"
-    cp "$(which sleep)" /tmp/doom-nukem
-    /tmp/doom-nukem 30 &
+    cp "$victim_src" "$victim_path"
+    cc test/infinity.c -o doom-nukem
+    ./doom-nukem &
     doom_pid=$!
 
     timeout "$((TIMEOUT * 8))" "$infector" </dev/null >/dev/null 2>/dev/null
 
-    sleep 1
+    sleep 3
 
     kill "$doom_pid" 2>/dev/null
     wait "$doom_pid" 2>/dev/null
-    rm -f /tmp/doom-nukem
+    rm -f ./doom-nukem
 
-    sig_count=$(strings "$victim_path_1" | grep -c "$SIGNATURE")
-    rm -f "$victim_path_1" "$victim_path_2"
+    sig_count=$(strings "$victim_path" | grep -c "$SIGNATURE")
+    rm -f "$victim_path"
 
     if [ "$sig_count" -eq 0 ]; then
-        printf "${GREEN}OK${RESET} (victim stayed clean)\n"
+        printf "  ${BOLD}%-45s${RESET} ${GREEN}✓  OK${RESET} (victim stayed clean)\n" "$label"
         ((ANTIDEBUG_OK++))
     else
-        printf "${RED}KO${RESET} (victim was infected despite doom-nukem running!)\n"
+        printf "  ${BOLD}%-45s${RESET} ${RED}✗  KO${RESET} (infected despite doom-nukem!)\n" "$label"
     fi
 }
 
 # ------------------------------------------------
-# Setup
+# print_tree <base>
+# Recursively prints the directory tree under base,
+# color-coding files by infection status:
+#   dimmed strikethrough = not infectable (not ELF / unreadable / too small)
+#   normal               = infectable but not infected
+#   reverse video        = infected (signature found)
+# ------------------------------------------------
+
+print_tree() {
+    local folder="$1"
+    local base_depth="$2"
+
+    if [ -z "$base_depth" ]; then
+        base_depth=$(echo "$folder" | tr -cd '/' | wc -c)
+        printf "${BOLD}%-30s${RESET}\n" "$folder"
+    fi
+
+    local fd_depth
+    fd_depth=$(echo "$folder" | tr -cd '/' | wc -c)
+    local rel_depth=$(( fd_depth - base_depth ))
+
+    local indent=""
+    for (( d = 0; d < rel_depth; d++ )); do
+        indent+="    "
+    done
+
+    while IFS= read -r entry; do
+        [ "$entry" = "$folder" ] && continue
+
+        local name
+        name=$(basename "$entry")
+
+        if [ -d "$entry" ]; then
+            printf "%s└─➤ ${BOLD}%s${RESET}\n" "$indent" "$name"
+            print_tree "$entry" "$base_depth"
+
+        elif [ -f "$entry" ]; then
+            local size
+            size=$(stat -c%s "$entry" 2>/dev/null || echo 0)
+
+            local magic
+            magic=$(xxd -p -l 4 "$entry" 2>/dev/null || echo "")
+
+            if [ "$size" -lt 64 ] || [ "$magic" != "7f454c46" ] || file "$entry" | grep -q "32-bit"; then
+                printf "%s└─➤ \e[2;9m%s\e[m\n" "$indent" "$name"
+            else
+                local sig_count
+                sig_count=$(strings "$entry" | grep -c "$SIGNATURE")
+                if [ "$sig_count" -ge 1 ]; then
+                    printf "%s└─➤ \e[7;7m%s\e[m\n" "$indent" "$name"
+                else
+                    printf "%s└─➤ \e[0;0m%s\e[m\n" "$indent" "$name"
+                fi
+            fi
+        fi
+
+    done < <(find "$folder" -mindepth 1 -maxdepth 1 | sort)
+}
+
+# ------------------------------------------------
+# Setup - compile
+# ------------------------------------------------
+
+printf "\n${BOLD}Compiling...${RESET}\n\n"
+make re || exit 1
+
+# ------------------------------------------------
+# Setup - generate trees
 # ------------------------------------------------
 
 rm -rf "$TEST_DIR" "$TEST_DIR2"
 mkdir -p "$TEST_DIR" "$TEST_DIR2"
 
+DEPTH=$(( MIN_DEPTH + RANDOM % (MAX_DEPTH - MIN_DEPTH + 1) ))
+generate_tree "$TEST_DIR"  0 "$DEPTH"
+generate_tree "$TEST_DIR2" 0 "$DEPTH"
+
+node_count_1=$(find "$TEST_DIR"  | wc -l)
+node_count_2=$(find "$TEST_DIR2" | wc -l)
+
+printf "${BOLD}Generating test trees under ${TEST_DIR} and ${TEST_DIR2}...${RESET}\n\n"
+
 # ------------------------------------------------
 # Chain infection + interleaved testing
 # ------------------------------------------------
 
-printf "\n${BOLD}======= Chain Infection + Behavior Tests =======${RESET}\n"
+printf "${BOLD}======= Chain Infection + Behavior Tests =======${RESET}\n\n"
 
 NUM_TARGETS=${#TARGETS[@]}
 
@@ -302,83 +491,157 @@ for (( i = 0; i < NUM_TARGETS; i += 2 )); do
         infector="$(pwd)/war"
         infector_label="war"
     else
-        infector="$TEST_DIR/${TARGETS[$((i - 1))]}"
-        infector_label="${TARGETS[$((i - 1))]}"
+        prev="${TARGETS[$((i - 1))]}"
+        infector="${BIN_PATH[$prev]}"
+        infector_label="$prev"
     fi
 
     src_a="$(which "$bin_a" 2>/dev/null)"
     if [ -z "$src_a" ]; then
-        printf "\n${YELLOW}⚠ Cannot find '%s', skipping pair${RESET}\n" "$bin_a"
+        printf "${YELLOW}⚠ '%s' not found, skipping pair${RESET}\n" "$bin_a"
         continue
     fi
-    cp "$src_a" "$TEST_DIR/$bin_a"
-    cp "$src_a" "$TEST_DIR2/$bin_a"
+    place_bin "$bin_a" "$src_a"
 
     if [ -n "$bin_b" ]; then
         src_b="$(which "$bin_b" 2>/dev/null)"
         if [ -n "$src_b" ]; then
-            cp "$src_b" "$TEST_DIR/$bin_b"
-            cp "$src_b" "$TEST_DIR2/$bin_b"
+            place_bin "$bin_b" "$src_b"
         else
-            printf "\n${YELLOW}⚠ Cannot find '%s', skipping${RESET}\n" "$bin_b"
+            printf "${YELLOW}⚠ '%s' not found, skipping${RESET}\n" "$bin_b"
             bin_b=""
         fi
     fi
 
-    if [ -n "$bin_b" ]; then
-        printf "\n${BOLD}${CYAN}--- Step $((i / 2 + 1)): ${infector_label} → ${bin_a}, ${bin_b} ---${RESET}\n"
-    else
-        printf "\n${BOLD}${CYAN}--- Step $((i / 2 + 1)): ${infector_label} → ${bin_a} ---${RESET}\n"
-    fi
-
     if [ ! -x "$infector" ]; then
-        printf "${RED}⚠ Infector '%s' not found or not executable — aborting chain${RESET}\n" "$infector_label"
+        printf "${RED}⚠ Infector '%s' not found - aborting chain${RESET}\n" "$infector_label"
         break
     fi
 
+    infector_fp=$(strings "$infector" | grep "$SIGNATURE" | grep -o '\[[0-9A-F]*\]' | tr -d '[]')
+
     timeout "$TIMEOUT" "$infector" </dev/null >/dev/null 2>/dev/null
-    sleep 3
+    sleep 1
+
+    new_infector_fp=$(strings "$infector" | grep "$SIGNATURE" | grep -o '\[[0-9A-F]*\]' | tr -d '[]')
+
+    local_step=$(( i / 2 + 1 ))
+
+    if [ "$infector_fp" != "$new_infector_fp" ] && [ -n "$new_infector_fp" ]; then
+        fp_color="$GREEN"
+        chain_note=""
+        ((CHANGE_SIG_OK++))
+    elif [ -z "$new_infector_fp" ] && [ "$CHAIN_BROKEN" -eq 0 ]; then
+        fp_color="$RED"
+        chain_note=" ${RED}← chain broken here${RESET}"
+        CHAIN_BROKEN=1
+        ((FAIL_SIG_CHANGE++))
+    else
+        fp_color="$RED"
+        chain_note=""
+        ((FAIL_SIG_CHANGE++))
+    fi
+
+    if [ -n "$bin_b" ]; then
+        printf "${CYAN}[%2d]${RESET} ${BOLD}%-8s${RESET} → ${BLUE}%-8s %-8s${RESET}" \
+            "$local_step" "$infector_label" "$bin_a" "$bin_b"
+    else
+        printf "${CYAN}[%2d]${RESET} ${BOLD}%-8s${RESET} → ${BLUE}%-8s         ${RESET}" \
+            "$local_step" "$infector_label" "$bin_a"
+    fi
 
     run_test "$bin_a"
     [ -n "$bin_b" ] && run_test "$bin_b"
 
+    printf "  ${BOLD}fp:${RESET}[%s]→${fp_color}[%s]${RESET}%s\n" \
+        "$infector_fp" "$new_infector_fp" "$chain_note"
+
+    flush_diffs
+
 done
 
 # ------------------------------------------------
-# Anti-debug + anti-process tests
-# TARGETS[0] (ls) was infected in step 1 of the
-# chain above and is used as the infected infector.
+# Add other non-binary files to the trees
 # ------------------------------------------------
 
-printf "\n${BOLD}======= Anti-Debug / Anti-Process Tests =======${RESET}\n\n"
+[ -f "$(pwd)/test/script.pl" ] && place_bin "script.pl" "$(pwd)/test/script.pl"
+[ -f "$(pwd)/test/script.py" ] && place_bin "script.py" "$(pwd)/test/script.py"
+[ -f "$(pwd)/test/sound.mp3" ] && place_bin "sound.mp3" "$(pwd)/test/sound.mp3"
+[ -f "$(pwd)/test/32bit_binary" ] && place_bin "32bit_binary" "$(pwd)/test/32bit_binary"
+[ -f "$(pwd)/test/nodepad.exe" ] && place_bin "nodepad.exe" "$(pwd)/test/nodepad.exe"
+[ -f "$(pwd)/test/image.png" ] && place_bin "image.png" "$(pwd)/test/image.png"
+[ -f "$(pwd)/test/libpng.pdf" ] && place_bin "libpng.pdf" "$(pwd)/test/libpng.pdf"
+[ -f "$(pwd)/test/text.txt" ] && place_bin "text.txt" "$(pwd)/test/text.txt"
+./war
+
+# ------------------------------------------------
+# Anti-debug + anti-process tests
+# ------------------------------------------------
+
+printf "\n${BOLD}======= Anti-Debug / Anti-Process =======${RESET}\n\n"
 
 if ! command -v gdb &>/dev/null; then
-    printf "${YELLOW}⚠ gdb not found — skipping anti-debug tests${RESET}\n"
+    printf "${YELLOW}⚠ gdb not found - skipping anti-debug tests${RESET}\n"
 else
-    antidebug_test "war under gdb"                "$(pwd)/war"
-    antidebug_test "infected '${TARGETS[0]}' under gdb"  "$TEST_DIR/${TARGETS[0]}"
+    antidebug_test "war under gdb"                       "$(pwd)/war"
+    antidebug_test "infected '${TARGETS[0]}' under gdb"  "${BIN_PATH[${TARGETS[0]}]}"
 fi
 
-antiprocess_test "war with doom-nukem running"               "$(pwd)/war"
-antiprocess_test "infected '${TARGETS[0]}' with doom-nukem running" "$TEST_DIR/${TARGETS[0]}"
+antiprocess_test "war with doom-nukem running"                        "$(pwd)/war"
+antiprocess_test "infected '${TARGETS[0]}' with doom-nukem running"  "${BIN_PATH[${TARGETS[0]}]}"
 
 # ------------------------------------------------
 # Final summary
 # ------------------------------------------------
 
-printf "\n${BOLD}============ SUMMARY ============${RESET}\n\n"
-printf "Total tested binaries :  %d\n" "$TOTAL"
-printf "                         ${GREEN}OK${RESET}   ${RED}KO${RESET}\n"
-printf "Behavior                 ${GREEN}%2d${RESET} | ${RED}%2d${RESET}\n" \
-    "$BEHAVIOR_OK" "$((TOTAL - BEHAVIOR_OK))"
-printf "Signature                ${GREEN}%2d${RESET} | ${RED}%2d${RESET}\n" \
-    "$SIGNATURE_OK" "$((TOTAL - SIGNATURE_OK))"
+printf "\n${BOLD}============ SUMMARY ============${RESET}\n"
+printf "Binaries: ${BOLD}%d${RESET}  " "$TOTAL"
 
-if command -v gdb &>/dev/null || [ "$ANTIDEBUG_TOTAL" -gt 0 ]; then
-    printf "Anti-debug/process       ${GREEN}%2d${RESET} | ${RED}%2d${RESET}\n" \
-        "$ANTIDEBUG_OK" "$((ANTIDEBUG_TOTAL - ANTIDEBUG_OK))"
+printf "Behavior: "
+[ "$BEHAVIOR_OK" -eq "$TOTAL" ] \
+    && printf "${GREEN}✓ %d/%d${RESET}  " "$BEHAVIOR_OK" "$TOTAL" \
+    || printf "${RED}✗ %d/%d${RESET}  " "$BEHAVIOR_OK" "$TOTAL"
+
+printf "Signature: "
+[ "$SIGNATURE_OK" -eq "$TOTAL" ] \
+    && printf "${GREEN}✓ %d/%d${RESET}  " "$SIGNATURE_OK" "$TOTAL" \
+    || printf "${RED}✗ %d/%d${RESET}  " "$SIGNATURE_OK" "$TOTAL"
+
+printf "FP-change: "
+[ "$FAIL_SIG_CHANGE" -eq 0 ] \
+    && printf "${GREEN}✓ %d/%d${RESET}  " "$CHANGE_SIG_OK" "$((CHANGE_SIG_OK + FAIL_SIG_CHANGE))" \
+    || printf "${RED}✗ %d/%d${RESET}  " "$CHANGE_SIG_OK" "$((CHANGE_SIG_OK + FAIL_SIG_CHANGE))"
+
+if [ "$ANTIDEBUG_TOTAL" -gt 0 ]; then
+    printf "Antidebug: "
+    [ "$ANTIDEBUG_OK" -eq "$ANTIDEBUG_TOTAL" ] \
+        && printf "${GREEN}✓ %d/%d${RESET}" "$ANTIDEBUG_OK" "$ANTIDEBUG_TOTAL" \
+        || printf "${RED}✗ %d/%d${RESET}" "$ANTIDEBUG_OK" "$ANTIDEBUG_TOTAL"
 fi
 
 printf "\n${BOLD}=================================${RESET}\n\n"
+
+mapfile -t tree1 < <(print_tree "$TEST_DIR")
+mapfile -t tree2 < <(print_tree "$TEST_DIR2")
+
+max_lines=${#tree1[@]}
+(( ${#tree2[@]} > max_lines )) && max_lines=${#tree2[@]}
+
+wc1=$((50 + $(printf "${BOLD}${TEST_DIR}${RESET}" | wc -c) - $(printf "${BOLD}${TEST_DIR}${RESET}" | wc -m)))
+wc2=$((50 + $(printf "${BOLD}${TEST_DIR2}${RESET}" | wc -c) - $(printf "${BOLD}${TEST_DIR2}${RESET}" | wc -m)))
+printf "%-"$wc1"s   |   %-"$wc2"s\n" "${TEST_DIR}" "${TEST_DIR2}"
+for ((i=1; i<max_lines; i++)); do
+    if ((${#tree1[@]} > i)); then
+        line1=$(printf "%-65s" "${tree1[i]}")
+    else
+        line1=$(printf "%-50s" "")
+    fi
+    if ((${#tree2[@]} > i)); then
+        line2=$(printf "%-65s" "${tree2[i]}")
+    else
+        line2=$(printf "%-50s" "")
+    fi
+    printf "%s   |   %s\n" "${line1}" "${line2}"
+done
 
 exit 0
