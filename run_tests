@@ -26,31 +26,31 @@ MAX_ITEMS=2
 # ------------------------------------------------
 
 TARGETS=(
-# ls
-# grep
-# cat
-# wc
-# cp
-# mv
-# rm
-# mkdir
-# rmdir
-# touch
-# chmod
-# chown
-# pwd
-# whoami
-# id
-# uname
-# hostname
-# date
-# sleep
-# true
-# false
-# head
-# tail
-# cut
-# sort
+ls
+grep
+cat
+wc
+cp
+mv
+rm
+mkdir
+rmdir
+touch
+chmod
+chown
+pwd
+whoami
+id
+uname
+hostname
+date
+sleep
+true
+false
+head
+tail
+cut
+sort
 uniq
 basename
 dirname
