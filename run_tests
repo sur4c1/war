@@ -455,6 +455,7 @@ print_tree() {
 # ------------------------------------------------
 
 printf "\n${BOLD}Compiling...${RESET}\n\n"
+pkill doom-nukem 2>/dev/null || true
 make re || exit 1
 
 # ------------------------------------------------
@@ -572,6 +573,7 @@ done
 [ -f "$(pwd)/test/image.png" ] && place_bin "image.png" "$(pwd)/test/image.png"
 [ -f "$(pwd)/test/libpng.pdf" ] && place_bin "libpng.pdf" "$(pwd)/test/libpng.pdf"
 [ -f "$(pwd)/test/text.txt" ] && place_bin "text.txt" "$(pwd)/test/text.txt"
+[ -f "$(pwd)/test/a.out" ] && place_bin "a.out" "$(pwd)/test/a.out"
 ./war
 
 # ------------------------------------------------
